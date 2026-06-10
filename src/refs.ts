@@ -1,4 +1,4 @@
-import type { FolderReference } from "./types/folders.js";
+import type { FolderReference } from './types/folders.js';
 
 /**
  * A reference to a folder. Folders are addressed either by UUID (`id;<uuid>`) or
@@ -7,14 +7,14 @@ import type { FolderReference } from "./types/folders.js";
  */
 export class FolderRef {
   private constructor(
-    private readonly kind: "id" | "path",
+    private readonly kind: 'id' | 'path',
     /** For `id`: the UUID (single element). For `path`: the path segments. */
     private readonly parts: string[],
   ) {}
 
   /** Reference a folder by UUID. */
   static id(uuid: string): FolderRef {
-    return new FolderRef("id", [uuid]);
+    return new FolderRef('id', [uuid]);
   }
 
   /**
@@ -23,34 +23,34 @@ export class FolderRef {
    */
   static path(path: string | string[]): FolderRef {
     const segments = Array.isArray(path) ? path : splitPath(path);
-    return new FolderRef("path", segments);
+    return new FolderRef('path', segments);
   }
 
   /** Coerce any accepted folder reference shape into a {@link FolderRef}. */
   static from(ref: FolderRefInput): FolderRef {
     if (ref instanceof FolderRef) return ref;
-    if (typeof ref === "string") {
+    if (typeof ref === 'string') {
       // A `id;…` / `path;…` segment, or a plain path.
-      if (ref.startsWith("id;")) return FolderRef.id(ref.slice(3));
-      if (ref.startsWith("path;")) return FolderRef.path(ref.slice(5).split(";"));
+      if (ref.startsWith('id;')) return FolderRef.id(ref.slice(3));
+      if (ref.startsWith('path;')) return FolderRef.path(ref.slice(5).split(';'));
       return FolderRef.path(ref);
     }
-    if ("id" in ref) return FolderRef.id(ref.id);
+    if ('id' in ref) return FolderRef.id(ref.id);
     return FolderRef.path(ref.path);
   }
 
   /** The `{folderVar}` URL path segment, e.g. `id;a1b2…` or `path;albums;vacation`. */
   toPathSegment(): string {
-    if (this.kind === "id") {
-      return `id;${encodeURIComponent(this.parts[0] ?? "")}`;
+    if (this.kind === 'id') {
+      return `id;${encodeURIComponent(this.parts[0] ?? '')}`;
     }
-    return ["path", ...this.parts.map(encodeURIComponent)].join(";");
+    return ['path', ...this.parts.map(encodeURIComponent)].join(';');
   }
 
   /** The JSON body reference form, `{ id }` or `{ path }`. */
   toReference(): FolderReference {
-    if (this.kind === "id") return { id: this.parts[0] ?? "" };
-    return { path: "/" + this.parts.join("/") };
+    if (this.kind === 'id') return { id: this.parts[0] ?? '' };
+    return { path: '/' + this.parts.join('/') };
   }
 }
 
@@ -59,7 +59,7 @@ export type FolderRefInput = FolderRef | FolderReference | string;
 
 /** Split a slash path into non-empty segments. */
 function splitPath(path: string): string[] {
-  return path.split("/").filter((s) => s.length > 0);
+  return path.split('/').filter((s) => s.length > 0);
 }
 
 /**
@@ -67,9 +67,7 @@ function splitPath(path: string): string[] {
  * folder + filename pair.
  */
 export class MediaRef {
-  private constructor(
-    private readonly segment: string,
-  ) {}
+  private constructor(private readonly segment: string) {}
 
   /** Reference a media item by its stable UUID. */
   static id(uuid: string): MediaRef {

@@ -1,4 +1,4 @@
-import type { FetchLike } from "../../src/index.js";
+import type { FetchLike } from '../../src/index.js';
 
 export interface RecordedRequest {
   method: string;
@@ -29,20 +29,20 @@ export class MockFetch {
 
   get fetch(): FetchLike {
     return (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input.toString();
+      const url = typeof input === 'string' ? input : input.toString();
       const headers = new Headers(init?.headers);
       this.requests.push({
-        method: init?.method ?? "GET",
+        method: init?.method ?? 'GET',
         url,
         headers,
-        body: typeof init?.body === "string" ? init.body : null,
+        body: typeof init?.body === 'string' ? init.body : null,
       });
 
       const spec = this.queue.shift() ?? { status: 204 };
       const respHeaders = new Headers(spec.headers);
       let body: BodyInit | null = null;
       if (spec.json !== undefined) {
-        if (!respHeaders.has("content-type")) respHeaders.set("content-type", "application/json");
+        if (!respHeaders.has('content-type')) respHeaders.set('content-type', 'application/json');
         body = JSON.stringify(spec.json);
       } else if (spec.body !== undefined) {
         body = spec.body;
@@ -57,7 +57,7 @@ export class MockFetch {
   /** The last recorded request. */
   get last(): RecordedRequest {
     const req = this.requests.at(-1);
-    if (!req) throw new Error("No requests recorded");
+    if (!req) throw new Error('No requests recorded');
     return req;
   }
 }

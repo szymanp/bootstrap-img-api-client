@@ -1,13 +1,9 @@
-import { fieldsParam, readParams } from "../http/language.js";
-import { parseJson, parseVoid, Transport } from "../http/transport.js";
-import type { ReadOptions, WriteLanguageOptions } from "../types/common.js";
-import type { Collection, Resource } from "../types/envelope.js";
-import type { PageQuery } from "../types/envelope.js";
-import type {
-  CreateRepositoryInput,
-  Repository,
-  UpdateRepositoryInput,
-} from "../types/repositories.js";
+import { fieldsParam, readParams } from '../http/language.js';
+import { parseJson, parseVoid, Transport } from '../http/transport.js';
+import type { ReadOptions, WriteLanguageOptions } from '../types/common.js';
+import type { Collection, Resource } from '../types/envelope.js';
+import type { PageQuery } from '../types/envelope.js';
+import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from '../types/repositories.js';
 
 export type RepositoryResource = Resource<Repository>;
 
@@ -19,18 +15,15 @@ export class RepositoriesApi {
    * Create a repository. The title is stored under `Content-Language`
    * (the client default unless overridden).
    */
-  async create(
-    input: CreateRepositoryInput,
-    options: WriteLanguageOptions = {},
-  ): Promise<RepositoryResource> {
+  async create(input: CreateRepositoryInput, options: WriteLanguageOptions = {}): Promise<RepositoryResource> {
     return this.transport.request({
-      method: "POST",
-      path: "/repos",
+      method: 'POST',
+      path: '/repos',
       acceptLanguage: options.acceptLanguage,
       // Content-Language is required by this endpoint; default to the client locale.
       contentLanguage: options.contentLanguage ?? this.transport.defaultLanguage,
       body: {
-        kind: "json",
+        kind: 'json',
         value: { data: input, fields: fieldsParam(options.fields) },
       },
       parse: parseJson<RepositoryResource>,
@@ -40,13 +33,13 @@ export class RepositoriesApi {
   /** List repositories the caller has a role on (paginated). */
   async query(
     query: PageQuery = {},
-    options: Pick<ReadOptions, "acceptLanguage"> = {},
+    options: Pick<ReadOptions, 'acceptLanguage'> = {},
   ): Promise<Collection<RepositoryResource>> {
     return this.transport.request({
-      method: "POST",
-      path: "/repos;query",
+      method: 'POST',
+      path: '/repos;query',
       acceptLanguage: options.acceptLanguage,
-      body: { kind: "json", value: { query } },
+      body: { kind: 'json', value: { query } },
       parse: parseJson<Collection<RepositoryResource>>,
     });
   }
@@ -54,7 +47,7 @@ export class RepositoriesApi {
   /** Retrieve a repository. */
   async get(repoId: string, options: ReadOptions = {}): Promise<RepositoryResource> {
     return this.transport.request({
-      method: "GET",
+      method: 'GET',
       path: `/repos/${encodeURIComponent(repoId)}`,
       query: readParams(options),
       acceptLanguage: options.acceptLanguage,
@@ -73,12 +66,12 @@ export class RepositoriesApi {
     options: WriteLanguageOptions = {},
   ): Promise<RepositoryResource> {
     return this.transport.request({
-      method: "POST",
+      method: 'POST',
       path: `/repos/${encodeURIComponent(repoId)}`,
       acceptLanguage: options.acceptLanguage,
       contentLanguage: options.contentLanguage ?? this.transport.defaultLanguage,
       body: {
-        kind: "json",
+        kind: 'json',
         value: { meta: { revision }, data, fields: fieldsParam(options.fields) },
       },
       parse: parseJson<RepositoryResource>,
@@ -88,9 +81,9 @@ export class RepositoriesApi {
   /** Delete a repository (requires the current revision). */
   async delete(repoId: string, revision: string): Promise<void> {
     return this.transport.request({
-      method: "DELETE",
+      method: 'DELETE',
       path: `/repos/${encodeURIComponent(repoId)}`,
-      body: { kind: "json", value: { revision } },
+      body: { kind: 'json', value: { revision } },
       parse: parseVoid,
     });
   }

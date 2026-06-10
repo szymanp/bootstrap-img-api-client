@@ -1,4 +1,4 @@
-import type { Localized, Principal } from "./common.js";
+import type { Localized, Principal } from './common.js';
 
 /** A repository as returned in a resource envelope's `data`. */
 export interface Repository {

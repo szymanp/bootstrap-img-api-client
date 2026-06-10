@@ -1,7 +1,7 @@
-import type { FolderReference } from "./folders.js";
+import type { FolderReference } from './folders.js';
 
-export type MediaType = "image" | "video";
-export type MediaVisibility = "private" | "normal" | "published" | string;
+export type MediaType = 'image' | 'video';
+export type MediaVisibility = 'private' | 'normal' | 'published' | string;
 
 /** Metadata payload returned by the media `metadata` endpoints. */
 export interface MediaMetadata {

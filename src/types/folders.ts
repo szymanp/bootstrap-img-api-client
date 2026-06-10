@@ -1,16 +1,8 @@
-import type { Effect, Localized, Permission, Principal } from "./common.js";
-import type { Resource } from "./envelope.js";
+import type { Effect, Localized, Permission, Principal } from './common.js';
+import type { Resource } from './envelope.js';
 
 /** Folder content kinds. */
-export type FolderType =
-  | "root"
-  | "albums"
-  | "album"
-  | "document"
-  | "tag"
-  | "media"
-  | "media-source"
-  | "picture";
+export type FolderType = 'root' | 'albums' | 'album' | 'document' | 'tag' | 'media' | 'media-source' | 'picture';
 
 /** A reference to a folder used inside JSON request bodies. */
 export type FolderReference = { id: string } | { path: string };
@@ -70,9 +62,9 @@ export interface MediaMembership {
 
 /** A patch op applied to a folder's direct media membership. */
 export type MediaMembershipPatch =
-  | { op: "add"; id: string; filename: string }
-  | { op: "remove"; id: string }
-  | { op: "remove"; filename: string };
+  | { op: 'add'; id: string; filename: string }
+  | { op: 'remove'; id: string }
+  | { op: 'remove'; filename: string };
 
 /** Query for `action;tree`. */
 export interface TreeQuery {

@@ -23,13 +23,16 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --dir test/integration"
+    "test:integration": "vitest run --dir test/integration",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
+    "prettier": "^3.8.4",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^1.5.0"

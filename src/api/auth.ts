@@ -1,5 +1,5 @@
-import { parseJson, parseVoid, Transport } from "../http/transport.js";
-import type { SendTokenResult, Session } from "../types/auth.js";
+import { parseJson, parseVoid, Transport } from '../http/transport.js';
+import type { SendTokenResult, Session } from '../types/auth.js';
 
 /** Authentication & session endpoints. */
 export class AuthApi {
@@ -12,9 +12,9 @@ export class AuthApi {
    */
   async sendToken(email: string): Promise<SendTokenResult> {
     return this.transport.request({
-      method: "POST",
-      path: "/auth/action;send-token",
-      body: { kind: "json", value: { email } },
+      method: 'POST',
+      path: '/auth/action;send-token',
+      body: { kind: 'json', value: { email } },
       // 204 (real user) returns no body; 200 (test user) returns the token.
       parse: async (res) => (res.status === 204 ? {} : ((await res.json()) as SendTokenResult)),
     });
@@ -26,8 +26,8 @@ export class AuthApi {
    */
   async login(email: string, token: string): Promise<void> {
     return this.transport.request({
-      method: "POST",
-      path: "/auth",
+      method: 'POST',
+      path: '/auth',
       headers: { authorization: `X-Token ${email}:${token}` },
       parse: parseVoid,
     });
@@ -37,9 +37,7 @@ export class AuthApi {
   async loginWithTestToken(email: string): Promise<void> {
     const { token } = await this.sendToken(email);
     if (!token) {
-      throw new Error(
-        `No token returned for ${email}; loginWithTestToken only works for test users.`,
-      );
+      throw new Error(`No token returned for ${email}; loginWithTestToken only works for test users.`);
     }
     await this.login(email, token);
   }
@@ -47,8 +45,8 @@ export class AuthApi {
   /** Terminate the current session and clear the session cookie. */
   async logout(): Promise<void> {
     return this.transport.request({
-      method: "POST",
-      path: "/auth/action;logout",
+      method: 'POST',
+      path: '/auth/action;logout',
       parse: parseVoid,
     });
   }
@@ -56,8 +54,8 @@ export class AuthApi {
   /** Report the current session, or throw `ApiError` (401) if none is active. */
   async session(): Promise<Session> {
     return this.transport.request({
-      method: "GET",
-      path: "/auth/session",
+      method: 'GET',
+      path: '/auth/session',
       parse: parseJson<Session>,
     });
   }

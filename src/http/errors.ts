@@ -13,27 +13,27 @@ export interface ProblemDetails {
 
 /** Known `type` discriminators advertised by the API. */
 export const ErrorType = {
-  BadRequest: "urn:bootstrap:error:bad-request",
-  ValidationFailed: "urn:bootstrap:error:validation-failed",
-  Unauthorized: "urn:bootstrap:error:unauthorized",
-  Forbidden: "urn:bootstrap:error:forbidden",
-  UserNotFound: "urn:bootstrap:error:user-not-found",
-  UserAlreadyExists: "urn:bootstrap:error:user-already-exists",
-  UserAlreadyVerified: "urn:bootstrap:error:user-already-verified",
-  UserNotVerified: "urn:bootstrap:error:user-not-verified",
-  TokenTooRecent: "urn:bootstrap:error:token-too-recent",
-  TokenNotFound: "urn:bootstrap:error:token-not-found",
-  InvalidToken: "urn:bootstrap:error:invalid-token",
-  TokenExpired: "urn:bootstrap:error:token-expired",
-  RepositoryNotFound: "urn:bootstrap:error:repository-not-found",
-  RepositoryNameConflict: "urn:bootstrap:error:repository-name-conflict",
-  FolderNotFound: "urn:bootstrap:error:folder-not-found",
-  ParentFolderNotFound: "urn:bootstrap:error:parent-folder-not-found",
-  MediaItemNotFound: "urn:bootstrap:error:media-item-not-found",
-  MediaItemAlreadyExists: "urn:bootstrap:error:media-item-already-exists",
-  RevisionConflict: "urn:bootstrap:error:revision-conflict",
-  UnsupportedMediaType: "urn:bootstrap:error:unsupported-media-type",
-  InternalError: "urn:bootstrap:error:internal-error",
+  BadRequest: 'urn:bootstrap:error:bad-request',
+  ValidationFailed: 'urn:bootstrap:error:validation-failed',
+  Unauthorized: 'urn:bootstrap:error:unauthorized',
+  Forbidden: 'urn:bootstrap:error:forbidden',
+  UserNotFound: 'urn:bootstrap:error:user-not-found',
+  UserAlreadyExists: 'urn:bootstrap:error:user-already-exists',
+  UserAlreadyVerified: 'urn:bootstrap:error:user-already-verified',
+  UserNotVerified: 'urn:bootstrap:error:user-not-verified',
+  TokenTooRecent: 'urn:bootstrap:error:token-too-recent',
+  TokenNotFound: 'urn:bootstrap:error:token-not-found',
+  InvalidToken: 'urn:bootstrap:error:invalid-token',
+  TokenExpired: 'urn:bootstrap:error:token-expired',
+  RepositoryNotFound: 'urn:bootstrap:error:repository-not-found',
+  RepositoryNameConflict: 'urn:bootstrap:error:repository-name-conflict',
+  FolderNotFound: 'urn:bootstrap:error:folder-not-found',
+  ParentFolderNotFound: 'urn:bootstrap:error:parent-folder-not-found',
+  MediaItemNotFound: 'urn:bootstrap:error:media-item-not-found',
+  MediaItemAlreadyExists: 'urn:bootstrap:error:media-item-already-exists',
+  RevisionConflict: 'urn:bootstrap:error:revision-conflict',
+  UnsupportedMediaType: 'urn:bootstrap:error:unsupported-media-type',
+  InternalError: 'urn:bootstrap:error:internal-error',
 } as const;
 
 export type KnownErrorType = (typeof ErrorType)[keyof typeof ErrorType];
@@ -46,7 +46,7 @@ export class ApiError extends Error {
 
   constructor(problem: ProblemDetails, response: Response) {
     super(problem.detail || problem.title || `HTTP ${problem.status} (${problem.type})`);
-    this.name = "ApiError";
+    this.name = 'ApiError';
     this.status = problem.status;
     this.problem = problem;
     this.response = response;
@@ -71,12 +71,12 @@ export function isApiError(err: unknown, type?: string): err is ApiError {
  */
 export async function problemFromResponse(response: Response): Promise<ProblemDetails> {
   const fallback: ProblemDetails = {
-    type: "about:blank",
+    type: 'about:blank',
     status: response.status,
     title: response.statusText || undefined,
   };
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("json")) {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('json')) {
     return fallback;
   }
   try {

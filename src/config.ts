@@ -1,5 +1,5 @@
-import type { CredentialStore } from "./http/credentials.js";
-import type { LanguageTag } from "./types/common.js";
+import type { CredentialStore } from './http/credentials.js';
+import type { LanguageTag } from './types/common.js';
 
 /** A `fetch`-compatible function. */
 export type FetchLike = typeof fetch;
@@ -36,21 +36,18 @@ export interface ResolvedConfig {
   defaultHeaders: Record<string, string>;
 }
 
-const DEFAULT_BASE_URL = "http://localhost:8080";
-const DEFAULT_LANGUAGE = "en-US";
+const DEFAULT_BASE_URL = 'http://localhost:8080';
+const DEFAULT_LANGUAGE = 'en-US';
 
-export function resolveConfig(
-  options: ClientOptions,
-  fallbackCredentials: () => CredentialStore,
-): ResolvedConfig {
+export function resolveConfig(options: ClientOptions, fallbackCredentials: () => CredentialStore): ResolvedConfig {
   const fetchImpl = options.fetch ?? globalThis.fetch;
-  if (typeof fetchImpl !== "function") {
+  if (typeof fetchImpl !== 'function') {
     throw new Error(
-      "No fetch implementation available. Pass `fetch` in ClientOptions or run on a platform with a global fetch.",
+      'No fetch implementation available. Pass `fetch` in ClientOptions or run on a platform with a global fetch.',
     );
   }
   return {
-    baseUrl: (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
+    baseUrl: (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, ''),
     defaultLanguage: options.defaultLanguage ?? DEFAULT_LANGUAGE,
     // Bind to preserve the global `this` (some runtimes require it).
     fetch: fetchImpl === globalThis.fetch ? fetchImpl.bind(globalThis) : fetchImpl,

@@ -1,5 +1,5 @@
-import { parseJson, Transport } from "../http/transport.js";
-import { isTemplateLink, type Link, type LinkSet } from "../types/envelope.js";
+import { parseJson, Transport } from '../http/transport.js';
+import { isTemplateLink, type Link, type LinkSet } from '../types/envelope.js';
 
 /** Body of `GET /` — a `links` envelope advertising every endpoint. */
 export interface ServiceRoot {
@@ -13,8 +13,8 @@ export class ServiceRootApi {
   /** Fetch the service root link set. */
   async get(): Promise<ServiceRoot> {
     return this.transport.request({
-      method: "GET",
-      path: "/",
+      method: 'GET',
+      path: '/',
       parse: parseJson<ServiceRoot>,
     });
   }

@@ -1,12 +1,12 @@
-import { AuthApi } from "./api/auth.js";
-import { FoldersApi } from "./api/folders.js";
-import { MediaApi } from "./api/media.js";
-import { RepositoriesApi } from "./api/repositories.js";
-import { ServiceRootApi } from "./api/service-root.js";
-import { UsersApi } from "./api/users.js";
-import { resolveConfig, type ClientOptions } from "./config.js";
-import { defaultCredentialStore, type CredentialStore } from "./http/credentials.js";
-import { Transport } from "./http/transport.js";
+import { AuthApi } from './api/auth.js';
+import { FoldersApi } from './api/folders.js';
+import { MediaApi } from './api/media.js';
+import { RepositoriesApi } from './api/repositories.js';
+import { ServiceRootApi } from './api/service-root.js';
+import { UsersApi } from './api/users.js';
+import { resolveConfig, type ClientOptions } from './config.js';
+import { defaultCredentialStore, type CredentialStore } from './http/credentials.js';
+import { Transport } from './http/transport.js';
 
 /**
  * Entry point for the bootstrap-img REST API.

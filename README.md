@@ -22,43 +22,38 @@ runtimes, pass a polyfill via the `fetch` option.
 ## Quick start (Node CLI)
 
 ```ts
-import { BootstrapClient, isApiError, ErrorType } from "bootstrap-img-client";
+import { BootstrapClient, isApiError, ErrorType } from 'bootstrap-img-client';
 
 const client = new BootstrapClient({
-  baseUrl: "http://localhost:8080",
-  defaultLanguage: "en-US",
+  baseUrl: 'http://localhost:8080',
+  defaultLanguage: 'en-US',
 });
 
 // Test users receive their token in the response, so we can log in directly.
-await client.auth.loginWithTestToken("test@example.com");
+await client.auth.loginWithTestToken('test@example.com');
 // (production: client.auth.sendToken(email) then client.auth.login(email, token))
 
-const repo = await client.repos.create({ name: "demo", title: "Demo" });
+const repo = await client.repos.create({ name: 'demo', title: 'Demo' });
 
 const folders = client.folders(repo.data.id);
 const album = await folders.create({
-  parent: { path: "/albums" },
-  name: "vacation",
-  title: "Vacation",
-  type: "album",
+  parent: { path: '/albums' },
+  name: 'vacation',
+  title: 'Vacation',
+  type: 'album',
 });
 
 const media = client.media(repo.data.id);
-const bytes = await readFileBytes("photo.jpg"); // Uint8Array | Blob | ArrayBuffer | ReadableStream
-const { mediaItemId } = await media.upload(
-  { id: album.data.id },
-  "photo.jpg",
-  bytes,
-  "image/jpeg",
-);
+const bytes = await readFileBytes('photo.jpg'); // Uint8Array | Blob | ArrayBuffer | ReadableStream
+const { mediaItemId } = await media.upload({ id: album.data.id }, 'photo.jpg', bytes, 'image/jpeg');
 
 // Optimistic concurrency + typed errors:
 try {
-  await client.repos.update(repo.data.id, repo.meta.revision!, { title: "Renamed" });
+  await client.repos.update(repo.data.id, repo.meta.revision!, { title: 'Renamed' });
 } catch (err) {
   if (isApiError(err, ErrorType.RevisionConflict)) {
     const fresh = await client.repos.get(repo.data.id);
-    await client.repos.update(repo.data.id, fresh.meta.revision!, { title: "Renamed" });
+    await client.repos.update(repo.data.id, fresh.meta.revision!, { title: 'Renamed' });
   } else {
     throw err;
   }
@@ -69,7 +64,7 @@ In Node the session cookie returned by `POST /auth` is captured automatically an
 replayed on every subsequent request. To persist a session between CLI invocations:
 
 ```ts
-import { BootstrapClient, MemoryCookieStore } from "bootstrap-img-client";
+import { BootstrapClient, MemoryCookieStore } from 'bootstrap-img-client';
 
 const credentials = MemoryCookieStore.fromJSON(loadSavedCookies() ?? []);
 const client = new BootstrapClient({ baseUrl, credentials });
@@ -86,10 +81,10 @@ credentialed CORS for cross-origin setups).
 
 ```ts
 // bootstrap-client.token.ts
-import { InjectionToken, type Provider } from "@angular/core";
-import { BootstrapClient } from "bootstrap-img-client";
+import { InjectionToken, type Provider } from '@angular/core';
+import { BootstrapClient } from 'bootstrap-img-client';
 
-export const BOOTSTRAP_CLIENT = new InjectionToken<BootstrapClient>("BOOTSTRAP_CLIENT");
+export const BOOTSTRAP_CLIENT = new InjectionToken<BootstrapClient>('BOOTSTRAP_CLIENT');
 
 export function provideBootstrapClient(baseUrl: string): Provider {
   return {
@@ -102,11 +97,11 @@ export function provideBootstrapClient(baseUrl: string): Provider {
 ```ts
 // app.config.ts
 export const appConfig: ApplicationConfig = {
-  providers: [provideBootstrapClient("https://api.example.com")],
+  providers: [provideBootstrapClient('https://api.example.com')],
 };
 
 // some.service.ts
-@Injectable({ providedIn: "root" })
+@Injectable({ providedIn: 'root' })
 export class RepoService {
   private client = inject(BOOTSTRAP_CLIENT);
   list() {
@@ -117,24 +112,24 @@ export class RepoService {
 
 ## API surface
 
-| Accessor | Endpoints |
-|---|---|
-| `client.serviceRoot` | `GET /` link discovery, template resolution |
-| `client.auth` | `sendToken`, `login`, `loginWithTestToken`, `logout`, `session` |
-| `client.users` | `register`, `resendVerification`, `verify` |
-| `client.repos` | `create`, `query`, `get`, `update`, `delete` |
+| Accessor                 | Endpoints                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client.serviceRoot`     | `GET /` link discovery, template resolution                                                                                                                   |
+| `client.auth`            | `sendToken`, `login`, `loginWithTestToken`, `logout`, `session`                                                                                               |
+| `client.users`           | `register`, `resendVerification`, `verify`                                                                                                                    |
+| `client.repos`           | `create`, `query`, `get`, `update`, `delete`                                                                                                                  |
 | `client.folders(repoId)` | `create`, `get`, `update`, `delete`, `listRoot`, `list`, `tree`, `getText`/`putText`, `getPermissions`/`patchPermissions`, `getMedia`/`putMedia`/`patchMedia` |
-| `client.media(repoId)` | `upload`, `download` (incl. variants & conditional GET), `metadata`, `list` |
+| `client.media(repoId)`   | `upload`, `download` (incl. variants & conditional GET), `metadata`, `list`                                                                                   |
 
 ### Folder & media references
 
 ```ts
-import { FolderRef, MediaRef } from "bootstrap-img-client";
+import { FolderRef, MediaRef } from 'bootstrap-img-client';
 
-FolderRef.id("a1b2…");              // -> id;a1b2…
-FolderRef.path("/albums/vacation"); // -> path;albums;vacation
-MediaRef.id("uuid");                // -> mid;uuid
-MediaRef.file({ path: "/albums" }, "p.jpg");
+FolderRef.id('a1b2…'); // -> id;a1b2…
+FolderRef.path('/albums/vacation'); // -> path;albums;vacation
+MediaRef.id('uuid'); // -> mid;uuid
+MediaRef.file({ path: '/albums' }, 'p.jpg');
 ```
 
 Methods that take a folder accept a `FolderRef`, a `{ id }` / `{ path }` object, or a

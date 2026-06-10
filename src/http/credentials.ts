@@ -31,7 +31,7 @@ export class BrowserCredentialStore implements CredentialStore {
     /* no-op: the browser stores Set-Cookie automatically */
   }
   fetchCredentials(): RequestCredentials {
-    return "include";
+    return 'include';
   }
 }
 
@@ -51,10 +51,8 @@ export class MemoryCookieStore implements CredentialStore {
 
   decorate(headers: Headers): void {
     if (this.cookies.size === 0) return;
-    const header = [...this.cookies.values()]
-      .map((c) => `${c.name}=${c.value}`)
-      .join("; ");
-    headers.set("cookie", header);
+    const header = [...this.cookies.values()].map((c) => `${c.name}=${c.value}`).join('; ');
+    headers.set('cookie', header);
   }
 
   capture(response: Response): void {
@@ -98,10 +96,10 @@ export class MemoryCookieStore implements CredentialStore {
 /** Read `Set-Cookie` headers across fetch implementations. */
 function getSetCookies(response: Response): string[] {
   const headers = response.headers as Headers & { getSetCookie?: () => string[] };
-  if (typeof headers.getSetCookie === "function") {
+  if (typeof headers.getSetCookie === 'function') {
     return headers.getSetCookie();
   }
-  const single = headers.get("set-cookie");
+  const single = headers.get('set-cookie');
   return single ? [single] : [];
 }
 
@@ -112,10 +110,10 @@ interface ParsedSetCookie {
 }
 
 function parseSetCookie(setCookie: string): ParsedSetCookie | null {
-  const parts = setCookie.split(";");
+  const parts = setCookie.split(';');
   const first = parts[0]?.trim();
   if (!first) return null;
-  const eq = first.indexOf("=");
+  const eq = first.indexOf('=');
   if (eq < 0) return null;
   const name = first.slice(0, eq).trim();
   const value = first.slice(eq + 1).trim();
@@ -123,12 +121,12 @@ function parseSetCookie(setCookie: string): ParsedSetCookie | null {
 
   let expired = false;
   for (let i = 1; i < parts.length; i++) {
-    const attr = parts[i]?.trim() ?? "";
-    const aEq = attr.indexOf("=");
+    const attr = parts[i]?.trim() ?? '';
+    const aEq = attr.indexOf('=');
     const key = (aEq < 0 ? attr : attr.slice(0, aEq)).trim().toLowerCase();
-    const aVal = aEq < 0 ? "" : attr.slice(aEq + 1).trim();
-    if (key === "max-age" && Number(aVal) <= 0) expired = true;
-    if (key === "expires" && aVal) {
+    const aVal = aEq < 0 ? '' : attr.slice(aEq + 1).trim();
+    if (key === 'max-age' && Number(aVal) <= 0) expired = true;
+    if (key === 'expires' && aVal) {
       const when = Date.parse(aVal);
       if (!Number.isNaN(when) && when <= Date.now()) expired = true;
     }
@@ -139,6 +137,6 @@ function parseSetCookie(setCookie: string): ParsedSetCookie | null {
 /** Pick a sensible default store for the current runtime. */
 export function defaultCredentialStore(): CredentialStore {
   const isBrowser =
-    typeof document !== "undefined" || typeof (globalThis as { window?: unknown }).window !== "undefined";
+    typeof document !== 'undefined' || typeof (globalThis as { window?: unknown }).window !== 'undefined';
   return isBrowser ? new BrowserCredentialStore() : new MemoryCookieStore();
 }

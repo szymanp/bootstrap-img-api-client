@@ -1,15 +1,15 @@
-import type { ResolvedConfig } from "../config.js";
-import type { BinaryBody } from "../types/media.js";
-import { ApiError, problemFromResponse } from "./errors.js";
+import type { ResolvedConfig } from '../config.js';
+import type { BinaryBody } from '../types/media.js';
+import { ApiError, problemFromResponse } from './errors.js';
 
 /** Query parameter values; `undefined` entries are omitted. */
 export type QueryParams = Record<string, string | number | boolean | undefined>;
 
 /** Request body, tagged so the transport can set the right `Content-Type`. */
 export type RequestBody =
-  | { kind: "json"; value: unknown }
-  | { kind: "markdown"; value: string }
-  | { kind: "binary"; value: BinaryBody; contentType: string };
+  | { kind: 'json'; value: unknown }
+  | { kind: 'markdown'; value: string }
+  | { kind: 'binary'; value: BinaryBody; contentType: string };
 
 export interface RequestSpec<T> {
   method: string;
@@ -47,8 +47,8 @@ export class Transport {
     const credentialsMode = this.config.credentials.fetchCredentials();
     if (credentialsMode) init.credentials = credentialsMode;
     // Required for streaming request bodies on some runtimes.
-    if (spec.body?.kind === "binary" && spec.body.value instanceof ReadableStream) {
-      (init as RequestInit & { duplex?: string }).duplex = "half";
+    if (spec.body?.kind === 'binary' && spec.body.value instanceof ReadableStream) {
+      (init as RequestInit & { duplex?: string }).duplex = 'half';
     }
 
     const response = await this.config.fetch(url, init);
@@ -73,15 +73,14 @@ export class Transport {
 
   private buildHeaders(spec: RequestSpec<unknown>): Headers {
     const headers = new Headers();
-    headers.set("accept", "application/json");
+    headers.set('accept', 'application/json');
     for (const [k, v] of Object.entries(this.config.defaultHeaders)) headers.set(k, v);
 
-    const acceptLang =
-      spec.acceptLanguage === undefined ? this.config.defaultLanguage : spec.acceptLanguage;
-    if (acceptLang) headers.set("accept-language", acceptLang);
+    const acceptLang = spec.acceptLanguage === undefined ? this.config.defaultLanguage : spec.acceptLanguage;
+    if (acceptLang) headers.set('accept-language', acceptLang);
 
     if (spec.contentLanguage !== undefined && spec.contentLanguage !== null) {
-      headers.set("content-language", spec.contentLanguage);
+      headers.set('content-language', spec.contentLanguage);
     }
 
     if (spec.headers) {
@@ -95,20 +94,17 @@ export class Transport {
   }
 }
 
-function encodeBody(
-  body: RequestBody | undefined,
-  headers: Headers,
-): BodyInit | undefined {
+function encodeBody(body: RequestBody | undefined, headers: Headers): BodyInit | undefined {
   if (!body) return undefined;
   switch (body.kind) {
-    case "json":
-      if (!headers.has("content-type")) headers.set("content-type", "application/json");
+    case 'json':
+      if (!headers.has('content-type')) headers.set('content-type', 'application/json');
       return JSON.stringify(body.value);
-    case "markdown":
-      if (!headers.has("content-type")) headers.set("content-type", "text/markdown");
+    case 'markdown':
+      if (!headers.has('content-type')) headers.set('content-type', 'text/markdown');
       return body.value;
-    case "binary":
-      headers.set("content-type", body.contentType);
+    case 'binary':
+      headers.set('content-type', body.contentType);
       return toBodyInit(body.value);
   }
 }

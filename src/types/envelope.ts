@@ -41,7 +41,7 @@ export type LinkSet = Record<string, Link>;
 
 /** Returns true when a link is a template link (has placeholders). */
 export function isTemplateLink(link: Link): link is TemplateLink {
-  return typeof (link as TemplateLink).template === "string";
+  return typeof (link as TemplateLink).template === 'string';
 }
 
 /** Single-resource envelope. `T` is the payload, `R` the shape of `related`. */

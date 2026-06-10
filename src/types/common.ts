@@ -11,19 +11,16 @@ export type LanguageTag = string;
 export type Localized = string | Record<LanguageTag, string>;
 
 /** A security principal referenced in permissions and repository roles. */
-export type Principal =
-  | { type: "user"; email: string }
-  | { type: "anonymous" }
-  | { type: "link"; id: string };
+export type Principal = { type: 'user'; email: string } | { type: 'anonymous' } | { type: 'link'; id: string };
 
 /** Permissions that can be granted on a folder. */
-export type Permission = "view" | "read" | "write" | "publish" | "share";
+export type Permission = 'view' | 'read' | 'write' | 'publish' | 'share';
 
 /** Effect of a permission record: add a grant, or reset to inherited default. */
-export type Effect = "grant" | "default";
+export type Effect = 'grant' | 'default';
 
 /** Rendering of localized fields. `standard` is the default when omitted. */
-export type Representation = "standard" | "original";
+export type Representation = 'standard' | 'original';
 
 /** Options common to read endpoints that support partial/representation rendering. */
 export interface ReadOptions {
