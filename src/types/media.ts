@@ -1,4 +1,4 @@
-import type { FolderReference } from './folders.js';
+import type { FolderReference } from './folders';
 
 export type MediaType = 'image' | 'video';
 export type MediaVisibility = 'private' | 'normal' | 'published' | string;

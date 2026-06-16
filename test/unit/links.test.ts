@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FolderRef, ServiceLinks, type LinkSet } from '../../src/index.js';
+import { FolderRef, ServiceLinks, type LinkSet } from '../../src/index';
 
 const links: LinkSet = {
   'auth:login': { rel: 'auth:login', href: '/auth' },

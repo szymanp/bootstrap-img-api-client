@@ -1,5 +1,5 @@
-import { FolderRef, type FolderRefInput } from './refs.js';
-import { isTemplateLink, type HrefLink, type Link, type LinkSet } from './types/envelope.js';
+import { FolderRef, type FolderRefInput } from './refs';
+import { isTemplateLink, type HrefLink, type Link, type LinkSet } from './types/envelope';
 
 /** Lazily resolves a {@link ServiceLinks} from the (cached) service root. */
 export type LinksProvider = () => Promise<ServiceLinks>;

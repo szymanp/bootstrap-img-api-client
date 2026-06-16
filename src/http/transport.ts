@@ -1,6 +1,6 @@
-import type { ResolvedConfig } from '../config.js';
-import type { BinaryBody } from '../types/media.js';
-import { ApiError, problemFromResponse } from './errors.js';
+import type { ResolvedConfig } from '../config';
+import type { BinaryBody } from '../types/media';
+import { ApiError, problemFromResponse } from './errors';
 
 /** Query parameter values; `undefined` entries are omitted. */
 export type QueryParams = Record<string, string | number | boolean | undefined>;

@@ -72,8 +72,8 @@ Layered, with a thin low-level transport under typed resource APIs:
 
 ## House style
 
-- ESM source with explicit `.js` import specifiers (required by
-  `verbatimModuleSyntax` + Bundler resolution). `type`-only imports use `import type`.
+- ESM source with extensionless relative import specifiers (allowed by `moduleResolution:
+  Bundler`; tsup/vitest bundle and tsc only typechecks). `type`-only imports use `import type`.
 - Zero runtime dependencies — keep it that way so the bundle stays Angular-friendly.
 - Add unit tests in `test/unit/` using the scripted `MockFetch` (`test/unit/mock-fetch.ts`);
   assert on URL, method, headers, and request body. Mirror real flows in

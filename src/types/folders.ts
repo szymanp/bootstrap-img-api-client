@@ -1,5 +1,5 @@
-import type { Effect, Localized, Permission, Principal } from './common.js';
-import type { Resource } from './envelope.js';
+import type { Effect, Localized, Permission, Principal } from './common';
+import type { Resource } from './envelope';
 
 /** Folder content kinds. */
 export type FolderType = 'root' | 'albums' | 'album' | 'document' | 'tag' | 'media' | 'media-source' | 'picture';

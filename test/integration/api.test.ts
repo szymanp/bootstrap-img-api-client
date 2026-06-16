@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ApiError, BootstrapClient, ErrorType, FolderRef, MediaRef, isApiError } from '../../src/index.js';
+import { ApiError, BootstrapClient, ErrorType, FolderRef, MediaRef, isApiError } from '../../src/index';
 
 /**
  * Integration tests against a live server. Opt-in: set BOOTSTRAP_API_URL (and

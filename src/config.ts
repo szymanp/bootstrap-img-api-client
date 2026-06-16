@@ -1,6 +1,6 @@
-import type { ServiceRoot } from './api/service-root.js';
-import type { CredentialStore } from './http/credentials.js';
-import type { LanguageTag } from './types/common.js';
+import type { ServiceRoot } from './api/service-root';
+import type { CredentialStore } from './http/credentials';
+import type { LanguageTag } from './types/common';
 
 /** A `fetch`-compatible function. */
 export type FetchLike = typeof fetch;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FolderRef, MediaRef } from '../../src/index.js';
+import { FolderRef, MediaRef } from '../../src/index';
 
 describe('FolderRef', () => {
   it('renders id path segments', () => {

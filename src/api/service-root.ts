@@ -1,6 +1,6 @@
-import { parseJson, Transport } from '../http/transport.js';
-import { isTemplateLink, type Link, type LinkSet } from '../types/envelope.js';
-import { ServiceLinks } from '../links.js';
+import { parseJson, Transport } from '../http/transport';
+import { isTemplateLink, type Link, type LinkSet } from '../types/envelope';
+import { ServiceLinks } from '../links';
 
 /** Body of `GET /` — a `links` envelope advertising every endpoint. */
 export interface ServiceRoot {

@@ -1,8 +1,8 @@
-import { parseJson, Transport } from '../http/transport.js';
-import type { LinksProvider, ServiceLinks } from '../links.js';
-import type { FolderRefInput, MediaRef } from '../refs.js';
-import type { Collection, HrefLink, Resource } from '../types/envelope.js';
-import type { BinaryBody, DownloadResult, MediaListQuery, MediaMetadata, UploadResult } from '../types/media.js';
+import { parseJson, Transport } from '../http/transport';
+import type { LinksProvider, ServiceLinks } from '../links';
+import type { FolderRefInput, MediaRef } from '../refs';
+import type { Collection, HrefLink, Resource } from '../types/envelope';
+import type { BinaryBody, DownloadResult, MediaListQuery, MediaMetadata, UploadResult } from '../types/media';
 
 export type MediaResource = Resource<MediaMetadata>;
 

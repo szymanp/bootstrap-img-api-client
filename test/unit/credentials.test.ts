@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BrowserCredentialStore, MemoryCookieStore } from '../../src/index.js';
+import { BrowserCredentialStore, MemoryCookieStore } from '../../src/index';
 
 function responseWithSetCookie(...cookies: string[]): Response {
   const headers = new Headers();

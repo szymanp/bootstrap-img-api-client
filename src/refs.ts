@@ -1,4 +1,4 @@
-import type { FolderReference } from './types/folders.js';
+import type { FolderReference } from './types/folders';
 
 /**
  * A reference to a folder. Folders are addressed either by UUID (`id;<uuid>`) or

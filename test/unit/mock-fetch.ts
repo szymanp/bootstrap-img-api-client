@@ -1,4 +1,4 @@
-import type { FetchLike } from '../../src/index.js';
+import type { FetchLike } from '../../src/index';
 
 export interface RecordedRequest {
   method: string;

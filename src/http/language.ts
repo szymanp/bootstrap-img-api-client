@@ -1,4 +1,4 @@
-import type { ReadOptions } from '../types/common.js';
+import type { ReadOptions } from '../types/common';
 
 /** Normalize a `fields` selector (array or string) to the comma-joined query form. */
 export function fieldsParam(fields: string | string[] | undefined): string | undefined {

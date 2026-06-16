@@ -1,10 +1,10 @@
-import { fieldsParam, readParams } from '../http/language.js';
-import { parseJson, parseVoid, Transport } from '../http/transport.js';
-import type { LinksProvider } from '../links.js';
-import type { ReadOptions, WriteLanguageOptions } from '../types/common.js';
-import type { Collection, Resource } from '../types/envelope.js';
-import type { PageQuery } from '../types/envelope.js';
-import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from '../types/repositories.js';
+import { fieldsParam, readParams } from '../http/language';
+import { parseJson, parseVoid, Transport } from '../http/transport';
+import type { LinksProvider } from '../links';
+import type { ReadOptions, WriteLanguageOptions } from '../types/common';
+import type { Collection, Resource } from '../types/envelope';
+import type { PageQuery } from '../types/envelope';
+import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from '../types/repositories';
 
 export type RepositoryResource = Resource<Repository>;
 

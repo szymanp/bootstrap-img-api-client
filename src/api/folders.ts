@@ -1,9 +1,9 @@
-import { fieldsParam, readParams } from '../http/language.js';
-import { parseJson, parseVoid, Transport } from '../http/transport.js';
-import type { LinksProvider } from '../links.js';
-import { type FolderRefInput } from '../refs.js';
-import type { ReadOptions, WriteLanguageOptions } from '../types/common.js';
-import type { Collection, PageQuery, Resource } from '../types/envelope.js';
+import { fieldsParam, readParams } from '../http/language';
+import { parseJson, parseVoid, Transport } from '../http/transport';
+import type { LinksProvider } from '../links';
+import { type FolderRefInput } from '../refs';
+import type { ReadOptions, WriteLanguageOptions } from '../types/common';
+import type { Collection, PageQuery, Resource } from '../types/envelope';
 import type {
   CreateFolderInput,
   Folder,
@@ -14,8 +14,8 @@ import type {
   PermissionRecord,
   TreeQuery,
   UpdateFolderInput,
-} from '../types/folders.js';
-import type { MediaMetadata } from '../types/media.js';
+} from '../types/folders';
+import type { MediaMetadata } from '../types/media';
 
 export type FolderResource = Resource<Folder, FolderRelated>;
 export type PermissionsCollection = Collection<Resource<PermissionRecord>, { folder?: FolderResource[] }>;

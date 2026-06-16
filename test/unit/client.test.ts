@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, BootstrapClient, ErrorType, isApiError, MemoryCookieStore } from '../../src/index.js';
-import { MockFetch } from './mock-fetch.js';
-import { serviceRootFixture } from './service-root.fixture.js';
+import { ApiError, BootstrapClient, ErrorType, isApiError, MemoryCookieStore } from '../../src/index';
+import { MockFetch } from './mock-fetch';
+import { serviceRootFixture } from './service-root.fixture';
 
 function makeClient(mock: MockFetch, credentials = new MemoryCookieStore()) {
   return new BootstrapClient({
@@ -243,7 +243,7 @@ describe('media', () => {
   });
 
   it('surfaces a 304 conditional GET as notModified', async () => {
-    const { MediaRef } = await import('../../src/index.js');
+    const { MediaRef } = await import('../../src/index');
     const mock = new MockFetch().enqueue({ status: 304, headers: { etag: '"abc"' } });
     const client = makeClient(mock);
 

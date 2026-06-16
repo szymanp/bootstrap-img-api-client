@@ -1,5 +1,5 @@
-import { parseVoid, Transport } from '../http/transport.js';
-import type { LinksProvider } from '../links.js';
+import { parseVoid, Transport } from '../http/transport';
+import type { LinksProvider } from '../links';
 
 /** User registration & verification endpoints. */
 export class UsersApi {

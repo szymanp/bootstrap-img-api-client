@@ -1,4 +1,4 @@
-import type { ServiceRoot } from '../../src/index.js';
+import type { ServiceRoot } from '../../src/index';
 
 /**
  * The service-root link set, as advertised by the live server. Unit tests seed

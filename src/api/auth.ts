@@ -1,6 +1,6 @@
-import { parseJson, parseVoid, Transport } from '../http/transport.js';
-import type { LinksProvider } from '../links.js';
-import type { SendTokenResult, Session } from '../types/auth.js';
+import { parseJson, parseVoid, Transport } from '../http/transport';
+import type { LinksProvider } from '../links';
+import type { SendTokenResult, Session } from '../types/auth';
 
 /** Authentication & session endpoints. */
 export class AuthApi {
