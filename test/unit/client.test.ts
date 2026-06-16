@@ -156,6 +156,30 @@ describe('folders', () => {
     });
   });
 
+  it('queries media membership with a wrapped query body and parses related media items', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: {},
+        records: [{ data: { id: 'm1', filename: 'first.JPG' } }],
+        related: { mediaitem: [{ meta: { revision: 'r1' }, data: { id: 'm1', type: 'image', visibility: 'private' } }] },
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client
+      .folders('repo1')
+      .queryMedia({ path: '/albums' }, { limit: 20, filename: '*.jpg', orderBy: { property: 'filename', order: 'ascending' } });
+
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/path;albums/media;query');
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      query: { limit: 20, filename: '*.jpg', orderBy: { property: 'filename', order: 'ascending' } },
+    });
+    expect(result.records[0]?.data).toEqual({ id: 'm1', filename: 'first.JPG' });
+    expect(result.related?.mediaitem?.[0]?.data.id).toBe('m1');
+  });
+
   it('reads text with the Revision-Id and Content-Language headers', async () => {
     const mock = new MockFetch().enqueue({
       status: 200,

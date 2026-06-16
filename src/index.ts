@@ -7,7 +7,13 @@ export type { ClientOptions, FetchLike } from './config.js';
 export { AuthApi } from './api/auth.js';
 export { UsersApi } from './api/users.js';
 export { RepositoriesApi, type RepositoryResource } from './api/repositories.js';
-export { FoldersApi, type FolderResource, type FolderText, type PermissionsCollection } from './api/folders.js';
+export {
+  FoldersApi,
+  type FolderResource,
+  type FolderText,
+  type MediaMembershipCollection,
+  type PermissionsCollection,
+} from './api/folders.js';
 export { MediaApi, type DownloadOptions, type MediaResource } from './api/media.js';
 export { ServiceRootApi, type ServiceRoot } from './api/service-root.js';
 
@@ -63,7 +69,9 @@ export type {
   FolderRelated,
   FolderType,
   MediaMembership,
+  MediaMembershipOrderBy,
   MediaMembershipPatch,
+  MediaMembershipQuery,
   PermissionRecord,
   TreeQuery,
   UpdateFolderInput,

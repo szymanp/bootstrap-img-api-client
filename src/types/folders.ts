@@ -60,6 +60,24 @@ export interface MediaMembership {
   filename: string;
 }
 
+/** Ordering for a media-membership query. */
+export interface MediaMembershipOrderBy {
+  property: 'filename' | 'creationTime';
+  order: 'ascending' | 'descending';
+}
+
+/** Query body for `POST /folders/{repoId}/{folderVar}/media;query`. */
+export interface MediaMembershipQuery {
+  /** Paging offset. */
+  offset?: number;
+  /** Paging limit. */
+  limit?: number;
+  /** Wildcard to filter filenames on, e.g. `*.jpg`. */
+  filename?: string;
+  /** Result ordering; defaults to the server's natural order when omitted. */
+  orderBy?: MediaMembershipOrderBy;
+}
+
 /** A patch op applied to a folder's direct media membership. */
 export type MediaMembershipPatch =
   | { op: 'add'; id: string; filename: string }

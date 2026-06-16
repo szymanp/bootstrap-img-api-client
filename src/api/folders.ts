@@ -9,13 +9,20 @@ import type {
   FolderRelated,
   MediaMembership,
   MediaMembershipPatch,
+  MediaMembershipQuery,
   PermissionRecord,
   TreeQuery,
   UpdateFolderInput,
 } from '../types/folders.js';
+import type { MediaMetadata } from '../types/media.js';
 
 export type FolderResource = Resource<Folder, FolderRelated>;
 export type PermissionsCollection = Collection<Resource<PermissionRecord>, { folder?: FolderResource[] }>;
+/** Result of a media-membership query: membership records plus the full media-item resources. */
+export type MediaMembershipCollection = Collection<
+  Resource<MediaMembership>,
+  { mediaitem?: Resource<MediaMetadata>[] }
+>;
 
 /** Full markdown body of a folder's `text` subresource plus its metadata. */
 export interface FolderText {
@@ -208,6 +215,25 @@ export class FoldersApi {
       method: 'GET',
       path: this.folderPath(ref, '/media'),
       parse: parseJson<MediaMembership[]>,
+    });
+  }
+
+  /**
+   * Query the folder's direct media-item membership with paging, filename
+   * filtering, and ordering. Returns the matching membership records plus the
+   * full media-item resources under `related.mediaitem`.
+   */
+  async queryMedia(
+    ref: FolderRefInput,
+    query: MediaMembershipQuery = {},
+    options: Pick<ReadOptions, 'acceptLanguage'> = {},
+  ): Promise<MediaMembershipCollection> {
+    return this.transport.request({
+      method: 'POST',
+      path: this.folderPath(ref, '/media;query'),
+      acceptLanguage: options.acceptLanguage,
+      body: { kind: 'json', value: { query } },
+      parse: parseJson<MediaMembershipCollection>,
     });
   }
 

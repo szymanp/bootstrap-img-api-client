@@ -12,6 +12,7 @@ Localized endpoints accept `Accept-Language` / `Content-Language` headers and re
 
 - The server listens on `http://localhost:8080` by default. All paths below are relative to that origin.
 - JSON request bodies must be sent with `Content-Type: application/json`. Binary upload/download and the folder `text` subresource use the content types noted on those endpoints.
+- Some JSON requests and responses in this document are described as "json5" and include comments; these comments do not exist in actual JSON objects.
 - Timestamps are RFC 3339 / ISO 8601 in UTC (e.g. `2026-01-01T00:00:00Z`).
 
 ### Authentication & sessions
@@ -45,19 +46,19 @@ Error bodies are `application/problem+json`:
 
 The machine-readable `type` is the stable discriminator. Known values:
 
-| `type`                                                                                                          | Typical status  |
-| --------------------------------------------------------------------------------------------------------------- | --------------- |
-| `urn:bootstrap:error:bad-request` / `:validation-failed`                                                        | 400 / 422       |
-| `urn:bootstrap:error:unauthorized`                                                                              | 401             |
-| `urn:bootstrap:error:forbidden`                                                                                 | 403             |
-| `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409       |
-| `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired`               | 400 / 401 / 404 |
-| `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict`                                        | 404 / 409       |
-| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found`                                             | 404             |
-| `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists`                                       | 404 / 409       |
-| `urn:bootstrap:error:revision-conflict`                                                                         | 409             |
-| `urn:bootstrap:error:unsupported-media-type`                                                                    | 415             |
-| `urn:bootstrap:error:internal-error`                                                                            | 500             |
+| `type` | Typical status |
+| --- | --- |
+| `urn:bootstrap:error:bad-request` / `:validation-failed` | 400 / 422 |
+| `urn:bootstrap:error:unauthorized` | 401 |
+| `urn:bootstrap:error:forbidden` | 403 |
+| `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409 |
+| `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
+| `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
+| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` | 404 |
+| `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
+| `urn:bootstrap:error:revision-conflict` | 409 |
+| `urn:bootstrap:error:unsupported-media-type` | 415 |
+| `urn:bootstrap:error:internal-error` | 500 |
 
 ---
 
@@ -70,27 +71,30 @@ Returns a `links` envelope advertising every available endpoint, keyed by `rel`.
 Each link is one of two kinds:
 
 - **href link** — a ready-to-use URL with no placeholders:
+
   ```json
   { "rel": "repos:create", "href": "/repos" }
   ```
+
 - **template link** — a URL with `{placeholder}` segments that must be substituted before use. The `fields` array lists the placeholders:
+
   ```json
   { "rel": "repos:read", "template": "/repos/{repoId}", "fields": ["repoId"] }
   ```
 
-**Response body**
+#### Response body
 
 ```json
 {
   "links": {
     "repos:create": { "rel": "repos:create", "href": "/repos" },
-    "repos:query": { "rel": "repos:query", "href": "/repos;query" },
-    "repos:read": { "rel": "repos:read", "template": "/repos/{repoId}", "fields": ["repoId"] }
+    "repos:query":  { "rel": "repos:query", "href": "/repos;query" },
+    "repos:read":   { "rel": "repos:read", "template": "/repos/{repoId}", "fields": ["repoId"] }
   }
 }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK`
 
@@ -102,13 +106,13 @@ Each link is one of two kinds:
 
 Issues a one-time login token for the given email. Always returns 204 to avoid user enumeration. Test users receive the token in the response body.
 
-**Request body**
+#### Response body
 
 ```json
 { "email": "user@example.com" }
 ```
 
-**Responses**
+#### Responses
 
 - `204 No Content` — token sent by email
 - `200 OK` — test user only: `{ "token": "<uuid>" }`
@@ -121,7 +125,7 @@ Validates a one-time token and starts a session (sets a session cookie).
 
 **Authorization header**: `X-Token <email>:<token>`
 
-**Responses**
+#### Responses
 
 - `204 No Content` — session started
 - `401 Unauthorized` — invalid token, unknown user, or unverified user
@@ -132,7 +136,7 @@ Validates a one-time token and starts a session (sets a session cookie).
 
 Terminates the current session and clears the session cookie.
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 - `401 Unauthorized` — no active session
@@ -143,18 +147,18 @@ Terminates the current session and clears the session cookie.
 
 Returns details about the current session.
 
-**Response body**
+#### Response body
 
 ```json
 {
   "principal": "<uuid>",
   "email": "user@example.com",
   "createdAt": "2026-01-01T00:00:00Z",
-  "expiresAt": "2026-01-08T00:00:00Z"
+  "expiresAt":  "2026-01-08T00:00:00Z"
 }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK`
 - `401 Unauthorized` — no active session
@@ -167,13 +171,13 @@ Returns details about the current session.
 
 Registers a new user and sends a verification email. Always returns 204 to avoid enumeration.
 
-**Request body**
+#### Response body
 
 ```json
 { "email": "user@example.com" }
 ```
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 
@@ -183,7 +187,7 @@ Registers a new user and sends a verification email. Always returns 204 to avoid
 
 Resends the verification email. `userIdOrEmail` is a UUID or an email address.
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 
@@ -193,13 +197,13 @@ Resends the verification email. `userIdOrEmail` is a UUID or an email address.
 
 Confirms email ownership using the token from the verification email, activating the account.
 
-**Request body**
+#### Response body
 
 ```json
 { "token": "<token-from-email>" }
 ```
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 
@@ -213,7 +217,7 @@ Repository responses include a `meta.revision` field used for optimistic concurr
 
 Creates a repository. `Content-Language` header is required; the title is stored under that locale.
 
-**Request body**
+#### Response body
 
 ```json
 {
@@ -224,7 +228,7 @@ Creates a repository. `Content-Language` header is required; the title is stored
 }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK` — `{ "meta": { "revision": "…" }, "data": { "id": "…", "name": "…", "title": "…" }, "links": { "self": "…" } }`
 - `400 Bad Request` — missing `Content-Language`
@@ -236,7 +240,7 @@ Creates a repository. `Content-Language` header is required; the title is stored
 
 Returns a paginated list of repositories the caller has a role on.
 
-**Request body**
+#### Response body
 
 ```json
 { "query": { "offset": 0, "limit": 20 } }
@@ -244,7 +248,7 @@ Returns a paginated list of repositories the caller has a role on.
 
 Both fields are optional.
 
-**Responses**
+#### Responses
 
 - `200 OK` — `{ "meta": { "offset": …, "limit": … }, "records": [ { "meta": …, "data": …, "links": … }, … ] }`
 
@@ -254,7 +258,7 @@ Both fields are optional.
 
 Retrieves a repository.
 
-**Query parameters**
+#### Query parameters
 
 - `fields` (optional) — comma-separated field selector
 - `representation` (optional) — `standard` (default) or `original`
@@ -264,7 +268,7 @@ The `representation` parameter selects how the repository is rendered:
 - `standard` (the default when omitted) — the rich representation: `title` is the single translation negotiated for `Accept-Language`.
 - `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations.
 
-**Responses**
+#### Responses
 
 - `200 OK` — repository resource
 - `404 Not Found`
@@ -275,7 +279,7 @@ The `representation` parameter selects how the repository is rendered:
 
 Updates a repository. All data fields are optional (partial update). `meta.revision` is required.
 
-**Request body**
+#### Response body
 
 ```json
 {
@@ -284,7 +288,7 @@ Updates a repository. All data fields are optional (partial update). `meta.revis
 }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK` — updated repository resource
 - `404 Not Found`
@@ -296,13 +300,13 @@ Updates a repository. All data fields are optional (partial update). `meta.revis
 
 Deletes a repository.
 
-**Request body**
+#### Response body
 
 ```json
 { "revision": "<current-revision>" }
 ```
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 - `404 Not Found`
@@ -314,10 +318,10 @@ Deletes a repository.
 
 Folders are addressed with a `{folderVar}` path segment:
 
-| Format         | Example                | Resolves to           |
-| -------------- | ---------------------- | --------------------- |
-| `id;<uuid>`    | `id;a1b2c3…`           | Folder with that UUID |
-| `path;el1;el2` | `path;albums;vacation` | `/albums/vacation`    |
+| Format | Example | Resolves to |
+| --- | --- | --- |
+| `id;<uuid>` | `id;a1b2c3…` | Folder with that UUID |
+| `path;el1;el2` | `path;albums;vacation` | `/albums/vacation` |
 
 In JSON bodies, folder references use:
 
@@ -342,7 +346,7 @@ Folder `links` includes a `text` link pointing at the text subresource. When any
 
 Creates a folder under an existing parent. `Content-Language` is required.
 
-**Request body**
+#### Response body
 
 ```json
 {
@@ -360,7 +364,7 @@ Valid folder types: `root`, `albums`, `album`, `document`, `tag`, `media`, `medi
 
 `data` is optional. When omitted, an empty default content object (`{}`) is stored. The content shape is determined by `type`; unknown fields are preserved.
 
-**Responses**
+#### Responses
 
 - `200 OK` — folder resource with ancestors
 - `404 Not Found` — parent folder not found
@@ -372,7 +376,7 @@ Valid folder types: `root`, `albums`, `album`, `document`, `tag`, `media`, `medi
 
 Retrieves a folder.
 
-**Query parameters**
+#### Query parameters
 
 - `fields` (optional) — comma-separated field selector
 - `representation` (optional) — `standard` (default) or `original`
@@ -382,7 +386,7 @@ The `representation` parameter selects how the folder is rendered:
 - `standard` (the default when omitted) — the rich representation: `title` is the single translation negotiated for `Accept-Language`, the derived `textPreview` field is included when text content exists, and `related.ancestors` lists the ancestor chain.
 - `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations, derived fields (such as `textPreview`) are omitted, and no `related.ancestors` section is returned. The included fields are `id`, `name`, `path`, `type`, `title`, and `data`.
 
-**Responses**
+#### Responses
 
 - `200 OK` — folder resource
 - `404 Not Found`
@@ -393,7 +397,7 @@ The `representation` parameter selects how the folder is rendered:
 
 Updates a folder (rename, move, change title, or replace typed content). `meta.revision` is required.
 
-**Request body**
+#### Response body
 
 ```json
 {
@@ -414,7 +418,7 @@ All fields under `data` are optional:
 - `title` — updates the folder's localized title. A bare string (e.g. `"Updated Title"`) is stored under the request's `Content-Language`, merging with any existing translations; an object (e.g. `{ "en": "Title", "pl": "Tytuł" }`) replaces **all** stored translations at once.
 - `data` — replaces the folder's typed content JSON wholesale; omitting it leaves the existing content unchanged.
 
-**Responses**
+#### Responses
 
 - `200 OK` — updated folder resource with ancestors
 - `404 Not Found`
@@ -427,13 +431,13 @@ All fields under `data` are optional:
 
 Deletes a folder and all its descendants.
 
-**Request body**
+#### Response body
 
 ```json
 { "revision": "<current-revision>" }
 ```
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 - `404 Not Found`
@@ -445,13 +449,13 @@ Deletes a folder and all its descendants.
 
 Lists root-level folders in the repository.
 
-**Request body** (optional)
+#### Response body (optional)
 
 ```json
 { "query": { "offset": 0, "limit": 20 } }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK` — array of folder resources
 
@@ -461,13 +465,13 @@ Lists root-level folders in the repository.
 
 Lists direct children of a folder.
 
-**Request body** (optional)
+#### Response body (optional)
 
 ```json
 { "query": { "offset": 0, "limit": 20 } }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK` — paginated array of folder resources
 - `404 Not Found`
@@ -478,13 +482,13 @@ Lists direct children of a folder.
 
 Returns a recursive subtree of subfolders.
 
-**Request body** (optional)
+#### Response body (optional)
 
 ```json
 { "query": { "depth": 3 } }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK` — hierarchical tree of folder resources
 - `404 Not Found`
@@ -495,13 +499,13 @@ Returns a recursive subtree of subfolders.
 
 Returns the folder's full markdown body. The translation is selected from the folder's stored content using the request's `Accept-Language`; if no translation matches and no text is stored, an empty body is returned.
 
-**Response headers**
+#### Response headers
 
 - `Content-Type: text/markdown`
 - `Content-Language` — language of the returned text
 - `Revision-Id` — the folder's current revision (pass back on `PUT`)
 
-**Responses**
+#### Responses
 
 - `200 OK` — markdown body (possibly empty)
 - `404 Not Found`
@@ -512,19 +516,19 @@ Returns the folder's full markdown body. The translation is selected from the fo
 
 Stores the request body as the folder's text content under the request's `Content-Language`. Other languages already present on the folder are preserved. Uses optimistic concurrency: the supplied revision must match the folder's current revision.
 
-**Request headers**
+#### Request headers
 
 - `Content-Type: text/markdown`
 - `Content-Language` — language to store the body under (falls back to default when omitted)
 - `Revision-Id: <current-revision>` (required)
 
-**Request body**: raw markdown text.
+#### Response body: raw markdown text
 
-**Response headers**
+#### Response headers
 
 - `Revision-Id: <new-revision>` — the folder's revision after the update
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 - `400 Bad Request` — missing or unparseable `Revision-Id`
@@ -538,7 +542,7 @@ Stores the request body as the folder's text content under the request's `Conten
 
 Lists all permissions on a folder.
 
-**Response body**
+#### Response body
 
 ```json
 {
@@ -550,7 +554,7 @@ Lists all permissions on a folder.
 }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK`
 - `404 Not Found`
@@ -563,16 +567,16 @@ Adds, removes, or modifies folder permissions.
 
 A **principal** is one of:
 
-| Form                                              | Meaning                     |
-| ------------------------------------------------- | --------------------------- |
+| Form | Meaning |
+| --- | --- |
 | `{ "type": "user", "email": "user@example.com" }` | A registered user, by email |
-| `{ "type": "anonymous" }`                         | Any unauthenticated caller  |
-| `{ "type": "link", "id": "<principal-uuid>" }`    | A shared-link principal     |
+| `{ "type": "anonymous" }` | Any unauthenticated caller |
+| `{ "type": "link", "id": "<principal-uuid>" }` | A shared-link principal |
 
 Valid `permission` values: `view`, `read`, `write`, `publish`, `share`.
 Valid `effect` values: `grant` (add the permission) or `default` (reset to the inherited default, i.e. remove the explicit grant).
 
-**Request body**
+#### Response body
 
 ```json
 {
@@ -588,7 +592,7 @@ Valid `effect` values: `grant` (add the permission) or `default` (reset to the i
 }
 ```
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 - `404 Not Found`
@@ -599,7 +603,7 @@ Valid `effect` values: `grant` (add the permission) or `default` (reset to the i
 
 Lists the folder's direct media-item membership — the set of media items linked into the folder under their stored filenames. Media items reachable only via descendant folders are not included.
 
-**Response body**
+#### Response body
 
 ```json
 [
@@ -608,9 +612,75 @@ Lists the folder's direct media-item membership — the set of media items linke
 ]
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK` — JSON array of membership entries
+- `403 Forbidden` — caller lacks read permission on the folder
+- `404 Not Found`
+
+---
+
+### POST /folders/{repoId}/{folderVar}/media;query
+
+Queries the folder's direct media-item membership — the set of media items linked into the folder under their stored filenames.
+
+#### Request body
+
+```json5
+{ 
+  "query": {
+    /* Optional offset for paging. */
+    "offset": 0,
+    /* Optional limit for paging. */
+    "limit": 20,
+    /* Optional wildcard to filter filenames on. */
+    "filename": "*.jpg",
+    /**
+      Specifies the ordering of the results.
+      Possible values for "property":
+      - "filename"
+      - "creationTime"
+      Possible values for "order":
+      - "ascending"
+      - "descending"
+    */
+    "orderBy": {
+      "property": "filename",
+      "order": "ascending"
+    }
+  }
+}
+```
+
+#### Response body
+
+The response includes a list of media items directly associated with the folder in the "records" property. The media item resources for the listed media items are included under "related" / "mediaitem".
+
+```json
+{
+  "meta": {},
+  "records": [
+    {
+      "data": { "id": "<media-item-uuid>", "filename": "first.JPG" },
+      ...
+    }
+  ],
+  "related": {
+    "mediaitem": [
+      {
+        "meta": { "revision": "…" },
+        "data": { "id": "…", "type": "image", "visibility": "private" },
+        "links": { ... }
+      },
+      ...
+    ]
+  }
+}
+```
+
+#### Responses
+
+- `200 OK`
 - `403 Forbidden` — caller lacks read permission on the folder
 - `404 Not Found`
 
@@ -620,7 +690,7 @@ Lists the folder's direct media-item membership — the set of media items linke
 
 Replaces the folder's direct media-item membership with exactly the supplied list. All existing direct links are removed and the new ones are added atomically (inside a single transaction). Duplicate filenames or duplicate media-item IDs within the list are rejected with 409.
 
-**Request body**
+#### Response body
 
 ```json
 [
@@ -629,7 +699,7 @@ Replaces the folder's direct media-item membership with exactly the supplied lis
 ]
 ```
 
-**Responses**
+#### Responses
 
 - `204 No Content`
 - `403 Forbidden` — caller lacks write permission on the folder
@@ -644,13 +714,13 @@ Applies an ordered list of patches to the folder's direct media-item membership 
 
 Each patch is one of:
 
-| Form                                                    | Effect                                                                            |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename.                                     |
-| `{ "op": "remove", "id": "<uuid>" }`                    | Unlink the media item with the given ID. No-op if not linked.                     |
-| `{ "op": "remove", "filename": "<name>" }`              | Unlink whichever media item is linked under that filename. No-op if no such link. |
+| Form | Effect |
+| --- | --- |
+| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename. |
+| `{ "op": "remove", "id": "<uuid>" }` | Unlink the media item with the given ID. No-op if not linked. |
+| `{ "op": "remove", "filename": "<name>" }` | Unlink whichever media item is linked under that filename. No-op if no such link. |
 
-**Request body**
+#### Response body
 
 ```json
 [
@@ -660,7 +730,7 @@ Each patch is one of:
 ]
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK` — JSON array of the resulting membership (same shape as the GET response)
 - `400 Bad Request` — invalid patch op or malformed `remove`
@@ -687,7 +757,7 @@ Items can also be addressed by stable ID using the `mid;<uuid>` prefix. To acces
 
 Uploads a media item. The body is the raw binary. `Content-Type` must be `image/*` or `video/*`.
 
-**Responses**
+#### Responses
 
 - `204 No Content` — `Media-Item-Id: <uuid>` header set
 - `403 Forbidden` — insufficient permission
@@ -700,11 +770,11 @@ Uploads a media item. The body is the raw binary. `Content-Type` must be `image/
 
 Downloads the original binary. Supports conditional GET via `If-None-Match` / ETag.
 
-**Query parameters**
+#### Query parameters
 
 - `size` (optional) — variant name (e.g. `thumbnail`, `medium`) to download a scaled version instead
 
-**Responses**
+#### Responses
 
 - `200 OK` — binary stream with `Content-Type`, `Content-Length`, `ETag`
 - `304 Not Modified` — ETag matches
@@ -716,7 +786,7 @@ Downloads the original binary. Supports conditional GET via `If-None-Match` / ET
 
 Returns metadata and HAL-style links to all available variants for a media item.
 
-**Response body**
+#### Response body
 
 ```json
 {
@@ -729,7 +799,7 @@ Returns metadata and HAL-style links to all available variants for a media item.
 }
 ```
 
-**Responses**
+#### Responses
 
 - `200 OK`
 - `404 Not Found`
@@ -740,7 +810,7 @@ Returns metadata and HAL-style links to all available variants for a media item.
 
 Downloads the original binary by stable media item ID. Supports `?size=<variant>` and conditional GET.
 
-**Responses** — same as the folder+filename variant above.
+#### Responses — same as the folder+filename variant above
 
 ---
 
@@ -748,7 +818,7 @@ Downloads the original binary by stable media item ID. Supports `?size=<variant>
 
 Returns metadata by stable media item ID.
 
-**Responses** — same as the folder+filename variant above.
+#### Responses — same as the folder+filename variant above
 
 ---
 
@@ -756,7 +826,7 @@ Returns metadata by stable media item ID.
 
 Lists media items in a folder.
 
-**Request body**
+#### Response body
 
 ```json
 {
@@ -765,13 +835,16 @@ Lists media items in a folder.
   "visibility": "private",
   "offset": 0,
   "limit": 20,
-  "orderBy": "createdAt"
+  "orderBy": {
+    "property": "creationTime",
+    "order": "ascending"
+  }
 }
 ```
 
 All fields except `folder` are optional.
 
-**Responses**
+#### Responses
 
 - `200 OK` — array of media records with metadata and variant links
 - `404 Not Found` — folder not found
