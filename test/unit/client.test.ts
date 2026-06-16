@@ -185,14 +185,19 @@ describe('folders', () => {
       json: {
         meta: {},
         records: [{ data: { id: 'm1', filename: 'first.JPG' } }],
-        related: { mediaitem: [{ meta: { revision: 'r1' }, data: { id: 'm1', type: 'image', visibility: 'private' } }] },
+        related: {
+          mediaitem: [{ meta: { revision: 'r1' }, data: { id: 'm1', type: 'image', visibility: 'private' } }],
+        },
       },
     });
     const client = makeClient(mock);
 
     const result = await client
       .folders('repo1')
-      .queryMedia({ path: '/albums' }, { limit: 20, filename: '*.jpg', orderBy: { property: 'filename', order: 'ascending' } });
+      .queryMedia(
+        { path: '/albums' },
+        { limit: 20, filename: '*.jpg', orderBy: { property: 'filename', order: 'ascending' } },
+      );
 
     expect(mock.last.method).toBe('POST');
     expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/path;albums/media;query');
