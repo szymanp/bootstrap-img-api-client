@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, BootstrapClient, ErrorType, isApiError, MemoryCookieStore } from '../../src/index.js';
 import { MockFetch } from './mock-fetch.js';
+import { serviceRootFixture } from './service-root.fixture.js';
 
 function makeClient(mock: MockFetch, credentials = new MemoryCookieStore()) {
   return new BootstrapClient({
@@ -8,8 +9,30 @@ function makeClient(mock: MockFetch, credentials = new MemoryCookieStore()) {
     defaultLanguage: 'en-US',
     fetch: mock.fetch,
     credentials,
+    // Seed the service root so resource APIs resolve URLs without a lazy GET /.
+    serviceRoot: serviceRootFixture,
   });
 }
+
+describe('service-root link resolution', () => {
+  it('lazily fetches GET / once on first use, then reuses it', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: serviceRootFixture },
+      { status: 200, json: { meta: {}, records: [] } },
+      { status: 200, json: { meta: {}, records: [] } },
+    );
+    // No seeded serviceRoot here, so the first call must resolve links over the wire.
+    const client = new BootstrapClient({ baseUrl: 'http://localhost:8080', fetch: mock.fetch });
+
+    await client.repos.query();
+    await client.repos.query();
+
+    const roots = mock.requests.filter((r) => new URL(r.url).pathname === '/');
+    expect(roots).toHaveLength(1);
+    expect(roots[0]?.method).toBe('GET');
+    expect(mock.requests.map((r) => new URL(r.url).pathname)).toEqual(['/', '/repos;query', '/repos;query']);
+  });
+});
 
 describe('auth', () => {
   it('sends a token request and parses the test-user token', async () => {

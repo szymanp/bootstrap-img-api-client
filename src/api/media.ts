@@ -1,7 +1,7 @@
 import { parseJson, Transport } from '../http/transport.js';
-import { MediaRef } from '../refs.js';
-import type { FolderRefInput } from '../refs.js';
-import type { Collection, Resource } from '../types/envelope.js';
+import type { LinksProvider, ServiceLinks } from '../links.js';
+import type { FolderRefInput, MediaRef } from '../refs.js';
+import type { Collection, HrefLink, Resource } from '../types/envelope.js';
 import type { BinaryBody, DownloadResult, MediaListQuery, MediaMetadata, UploadResult } from '../types/media.js';
 
 export type MediaResource = Resource<MediaMetadata>;
@@ -19,14 +19,23 @@ export class MediaApi {
   constructor(
     private readonly transport: Transport,
     private readonly repoId: string,
+    private readonly links: LinksProvider,
   ) {}
 
-  private base(): string {
-    return `/media/${encodeURIComponent(this.repoId)}`;
+  /** Resolve the download link for a media ref, picking the by-id or by-file relation. */
+  private downloadLink(links: ServiceLinks, ref: MediaRef): HrefLink {
+    const addr = ref.addressing;
+    return addr.kind === 'id'
+      ? links.downloadMediaById(this.repoId, addr.mediaItemId)
+      : links.downloadMedia(this.repoId, addr.folder, addr.filename);
   }
 
-  private mediaPath(ref: MediaRef, suffix = ''): string {
-    return `${this.base()}/${ref.toPathSuffix()}${suffix}`;
+  /** Resolve the metadata link for a media ref, picking the by-id or by-file relation. */
+  private metadataLink(links: ServiceLinks, ref: MediaRef): HrefLink {
+    const addr = ref.addressing;
+    return addr.kind === 'id'
+      ? links.mediaMetadataById(this.repoId, addr.mediaItemId)
+      : links.mediaMetadata(this.repoId, addr.folder, addr.filename);
   }
 
   /**
@@ -36,7 +45,7 @@ export class MediaApi {
   async upload(folder: FolderRefInput, filename: string, body: BinaryBody, contentType: string): Promise<UploadResult> {
     return this.transport.request({
       method: 'PUT',
-      path: this.mediaPath(MediaRef.file(folder, filename)),
+      path: (await this.links()).uploadMedia(this.repoId, folder, filename).href,
       body: { kind: 'binary', value: body, contentType },
       parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? '' }),
     });
@@ -50,7 +59,7 @@ export class MediaApi {
     const ifNoneMatch = Array.isArray(options.ifNoneMatch) ? options.ifNoneMatch.join(', ') : options.ifNoneMatch;
     return this.transport.request({
       method: 'GET',
-      path: this.mediaPath(ref),
+      path: this.downloadLink(await this.links(), ref).href,
       query: { size: options.size },
       acceptLanguage: null,
       headers: { accept: '*/*', 'if-none-match': ifNoneMatch },
@@ -74,7 +83,7 @@ export class MediaApi {
   async metadata(ref: MediaRef): Promise<MediaResource> {
     return this.transport.request({
       method: 'GET',
-      path: this.mediaPath(ref, '/metadata'),
+      path: this.metadataLink(await this.links(), ref).href,
       parse: parseJson<MediaResource>,
     });
   }
@@ -83,7 +92,7 @@ export class MediaApi {
   async list(query: MediaListQuery, options: { acceptLanguage?: string } = {}): Promise<Collection<MediaResource>> {
     return this.transport.request({
       method: 'POST',
-      path: `${this.base()}/action;list`,
+      path: (await this.links()).listMedia(this.repoId).href,
       acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: query },
       parse: parseJson<Collection<MediaResource>>,

@@ -16,6 +16,7 @@ export {
 } from './api/folders.js';
 export { MediaApi, type DownloadOptions, type MediaResource } from './api/media.js';
 export { ServiceRootApi, type ServiceRoot } from './api/service-root.js';
+export { ServiceLinks } from './links.js';
 
 // References.
 export { FolderRef, MediaRef, type FolderRefInput } from './refs.js';

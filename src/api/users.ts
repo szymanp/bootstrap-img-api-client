@@ -1,14 +1,18 @@
 import { parseVoid, Transport } from '../http/transport.js';
+import type { LinksProvider } from '../links.js';
 
 /** User registration & verification endpoints. */
 export class UsersApi {
-  constructor(private readonly transport: Transport) {}
+  constructor(
+    private readonly transport: Transport,
+    private readonly links: LinksProvider,
+  ) {}
 
   /** Register a new user and send a verification email. Always returns 204. */
   async register(email: string): Promise<void> {
     return this.transport.request({
       method: 'POST',
-      path: '/users',
+      path: (await this.links()).createUser().href,
       body: { kind: 'json', value: { email } },
       parse: parseVoid,
     });
@@ -18,7 +22,7 @@ export class UsersApi {
   async resendVerification(userIdOrEmail: string): Promise<void> {
     return this.transport.request({
       method: 'POST',
-      path: `/users/${encodeURIComponent(userIdOrEmail)}/action;resend-verification-token`,
+      path: (await this.links()).resendVerificationToken(userIdOrEmail).href,
       parse: parseVoid,
     });
   }
@@ -27,7 +31,7 @@ export class UsersApi {
   async verify(userIdOrEmail: string, token: string): Promise<void> {
     return this.transport.request({
       method: 'POST',
-      path: `/users/${encodeURIComponent(userIdOrEmail)}/action;verify-user`,
+      path: (await this.links()).verifyUser(userIdOrEmail).href,
       body: { kind: 'json', value: { token } },
       parse: parseVoid,
     });

@@ -7,6 +7,7 @@ import { UsersApi } from './api/users.js';
 import { resolveConfig, type ClientOptions } from './config.js';
 import { defaultCredentialStore, type CredentialStore } from './http/credentials.js';
 import { Transport } from './http/transport.js';
+import type { LinksProvider } from './links.js';
 
 /**
  * Entry point for the bootstrap-img REST API.
@@ -34,24 +35,29 @@ export class BootstrapClient {
   readonly users: UsersApi;
   readonly repos: RepositoriesApi;
 
+  /** Lazily resolves (and caches) the typed link builder from the service root. */
+  private readonly links: LinksProvider;
+
   constructor(options: ClientOptions = {}) {
     const config = resolveConfig(options, defaultCredentialStore);
     this.credentials = config.credentials;
     this.transport = new Transport(config);
 
-    this.serviceRoot = new ServiceRootApi(this.transport);
-    this.auth = new AuthApi(this.transport);
-    this.users = new UsersApi(this.transport);
-    this.repos = new RepositoriesApi(this.transport);
+    this.serviceRoot = new ServiceRootApi(this.transport, options.serviceRoot);
+    this.links = () => this.serviceRoot.links();
+
+    this.auth = new AuthApi(this.transport, this.links);
+    this.users = new UsersApi(this.transport, this.links);
+    this.repos = new RepositoriesApi(this.transport, this.links);
   }
 
   /** Folder endpoints scoped to a repository. */
   folders(repoId: string): FoldersApi {
-    return new FoldersApi(this.transport, repoId);
+    return new FoldersApi(this.transport, repoId, this.links);
   }
 
   /** Media-item endpoints scoped to a repository. */
   media(repoId: string): MediaApi {
-    return new MediaApi(this.transport, repoId);
+    return new MediaApi(this.transport, repoId, this.links);
   }
 }

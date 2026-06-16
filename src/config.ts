@@ -1,3 +1,4 @@
+import type { ServiceRoot } from './api/service-root.js';
 import type { CredentialStore } from './http/credentials.js';
 import type { LanguageTag } from './types/common.js';
 
@@ -26,6 +27,11 @@ export interface ClientOptions {
   credentials?: CredentialStore;
   /** Extra headers added to every request (overridable per call). */
   defaultHeaders?: Record<string, string>;
+  /**
+   * A pre-fetched service root. When provided, resource APIs resolve endpoint
+   * URLs from it without a lazy `GET /` round-trip on first use.
+   */
+  serviceRoot?: ServiceRoot;
 }
 
 export interface ResolvedConfig {

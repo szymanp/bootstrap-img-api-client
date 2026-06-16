@@ -62,26 +62,39 @@ function splitPath(path: string): string[] {
   return path.split('/').filter((s) => s.length > 0);
 }
 
+/** How a {@link MediaRef} addresses its media item — by stable id or by location. */
+export type MediaAddressing =
+  | { kind: 'id'; mediaItemId: string }
+  | { kind: 'file'; folder: FolderRefInput; filename: string };
+
 /**
  * A reference to a media item: either by stable id (`mid;<uuid>`) or by the
  * folder + filename pair.
  */
 export class MediaRef {
-  private constructor(private readonly segment: string) {}
+  private constructor(private readonly addr: MediaAddressing) {}
 
   /** Reference a media item by its stable UUID. */
   static id(uuid: string): MediaRef {
-    return new MediaRef(`mid;${encodeURIComponent(uuid)}`);
+    return new MediaRef({ kind: 'id', mediaItemId: uuid });
   }
 
   /** Reference a media item by the folder it lives in and its filename. */
   static file(folder: FolderRefInput, filename: string): MediaRef {
-    const folderVar = FolderRef.from(folder).toPathSegment();
-    return new MediaRef(`${folderVar}/${encodeURIComponent(filename)}`);
+    return new MediaRef({ kind: 'file', folder, filename });
+  }
+
+  /** How this media item is addressed — used to pick the right link relation. */
+  get addressing(): MediaAddressing {
+    return this.addr;
   }
 
   /** The path suffix appended after `/media/{repoId}/`. */
   toPathSuffix(): string {
-    return this.segment;
+    if (this.addr.kind === 'id') {
+      return `mid;${encodeURIComponent(this.addr.mediaItemId)}`;
+    }
+    const folderVar = FolderRef.from(this.addr.folder).toPathSegment();
+    return `${folderVar}/${encodeURIComponent(this.addr.filename)}`;
   }
 }

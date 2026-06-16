@@ -1,6 +1,7 @@
 import { fieldsParam, readParams } from '../http/language.js';
 import { parseJson, parseVoid, Transport } from '../http/transport.js';
-import { FolderRef, type FolderRefInput } from '../refs.js';
+import type { LinksProvider } from '../links.js';
+import { type FolderRefInput } from '../refs.js';
 import type { ReadOptions, WriteLanguageOptions } from '../types/common.js';
 import type { Collection, PageQuery, Resource } from '../types/envelope.js';
 import type {
@@ -38,21 +39,14 @@ export class FoldersApi {
   constructor(
     private readonly transport: Transport,
     private readonly repoId: string,
+    private readonly links: LinksProvider,
   ) {}
-
-  private base(): string {
-    return `/folders/${encodeURIComponent(this.repoId)}`;
-  }
-
-  private folderPath(ref: FolderRefInput, suffix = ''): string {
-    return `${this.base()}/${FolderRef.from(ref).toPathSegment()}${suffix}`;
-  }
 
   /** Create a folder under an existing parent. */
   async create(input: CreateFolderInput, options: WriteLanguageOptions = {}): Promise<FolderResource> {
     return this.transport.request({
       method: 'POST',
-      path: this.base(),
+      path: (await this.links()).createFolder(this.repoId).href,
       acceptLanguage: options.acceptLanguage,
       contentLanguage: options.contentLanguage ?? this.transport.defaultLanguage,
       body: { kind: 'json', value: { data: input, fields: fieldsParam(options.fields) } },
@@ -64,7 +58,7 @@ export class FoldersApi {
   async get(ref: FolderRefInput, options: ReadOptions = {}): Promise<FolderResource> {
     return this.transport.request({
       method: 'GET',
-      path: this.folderPath(ref),
+      path: (await this.links()).readFolder(this.repoId, ref).href,
       query: readParams(options),
       acceptLanguage: options.acceptLanguage,
       parse: parseJson<FolderResource>,
@@ -80,7 +74,7 @@ export class FoldersApi {
   ): Promise<FolderResource> {
     return this.transport.request({
       method: 'POST',
-      path: this.folderPath(ref),
+      path: (await this.links()).updateFolder(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
       contentLanguage: options.contentLanguage ?? this.transport.defaultLanguage,
       body: {
@@ -95,7 +89,7 @@ export class FoldersApi {
   async delete(ref: FolderRefInput, revision: string): Promise<void> {
     return this.transport.request({
       method: 'DELETE',
-      path: this.folderPath(ref),
+      path: (await this.links()).deleteFolder(this.repoId, ref).href,
       body: { kind: 'json', value: { revision } },
       parse: parseVoid,
     });
@@ -108,7 +102,7 @@ export class FoldersApi {
   ): Promise<Collection<FolderResource>> {
     return this.transport.request({
       method: 'POST',
-      path: `${this.base()}/action;listroot`,
+      path: (await this.links()).listRootFolders(this.repoId).href,
       acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: { query } },
       parse: parseJson<Collection<FolderResource>>,
@@ -123,7 +117,7 @@ export class FoldersApi {
   ): Promise<Collection<FolderResource>> {
     return this.transport.request({
       method: 'POST',
-      path: this.folderPath(ref, '/action;list'),
+      path: (await this.links()).listFolders(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: { query } },
       parse: parseJson<Collection<FolderResource>>,
@@ -138,7 +132,7 @@ export class FoldersApi {
   ): Promise<Collection<FolderResource>> {
     return this.transport.request({
       method: 'POST',
-      path: this.folderPath(ref, '/action;tree'),
+      path: (await this.links()).treeFolders(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: { query } },
       parse: parseJson<Collection<FolderResource>>,
@@ -149,7 +143,7 @@ export class FoldersApi {
   async getText(ref: FolderRefInput, options: Pick<ReadOptions, 'acceptLanguage'> = {}): Promise<FolderText> {
     return this.transport.request({
       method: 'GET',
-      path: this.folderPath(ref, '/text'),
+      path: (await this.links()).readFolderText(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
       headers: { accept: 'text/markdown' },
       parse: async (res) => ({
@@ -173,7 +167,7 @@ export class FoldersApi {
   ): Promise<{ revision: string | null }> {
     return this.transport.request({
       method: 'PUT',
-      path: this.folderPath(ref, '/text'),
+      path: (await this.links()).updateFolderText(this.repoId, ref).href,
       contentLanguage: options.contentLanguage ?? this.transport.defaultLanguage,
       headers: { 'revision-id': revision },
       body: { kind: 'markdown', value: markdown },
@@ -188,7 +182,7 @@ export class FoldersApi {
   ): Promise<PermissionsCollection> {
     return this.transport.request({
       method: 'GET',
-      path: this.folderPath(ref, '/permissions'),
+      path: (await this.links()).listFolderPermissions(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
       parse: parseJson<PermissionsCollection>,
     });
@@ -202,7 +196,7 @@ export class FoldersApi {
   ): Promise<void> {
     return this.transport.request({
       method: 'PATCH',
-      path: this.folderPath(ref, '/permissions'),
+      path: (await this.links()).patchFolderPermissions(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: { records: records.map((data) => ({ data })) } },
       parse: parseVoid,
@@ -213,7 +207,7 @@ export class FoldersApi {
   async getMedia(ref: FolderRefInput): Promise<MediaMembership[]> {
     return this.transport.request({
       method: 'GET',
-      path: this.folderPath(ref, '/media'),
+      path: (await this.links()).listFolderMedia(this.repoId, ref).href,
       parse: parseJson<MediaMembership[]>,
     });
   }
@@ -230,7 +224,7 @@ export class FoldersApi {
   ): Promise<MediaMembershipCollection> {
     return this.transport.request({
       method: 'POST',
-      path: this.folderPath(ref, '/media;query'),
+      path: (await this.links()).queryFolderMedia(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: { query } },
       parse: parseJson<MediaMembershipCollection>,
@@ -241,7 +235,7 @@ export class FoldersApi {
   async putMedia(ref: FolderRefInput, members: MediaMembership[]): Promise<void> {
     return this.transport.request({
       method: 'PUT',
-      path: this.folderPath(ref, '/media'),
+      path: (await this.links()).replaceFolderMedia(this.repoId, ref).href,
       body: { kind: 'json', value: members },
       parse: parseVoid,
     });
@@ -251,7 +245,7 @@ export class FoldersApi {
   async patchMedia(ref: FolderRefInput, patches: MediaMembershipPatch[]): Promise<MediaMembership[]> {
     return this.transport.request({
       method: 'PATCH',
-      path: this.folderPath(ref, '/media'),
+      path: (await this.links()).patchFolderMedia(this.repoId, ref).href,
       body: { kind: 'json', value: patches },
       parse: parseJson<MediaMembership[]>,
     });

@@ -1,9 +1,13 @@
 import { parseJson, parseVoid, Transport } from '../http/transport.js';
+import type { LinksProvider } from '../links.js';
 import type { SendTokenResult, Session } from '../types/auth.js';
 
 /** Authentication & session endpoints. */
 export class AuthApi {
-  constructor(private readonly transport: Transport) {}
+  constructor(
+    private readonly transport: Transport,
+    private readonly links: LinksProvider,
+  ) {}
 
   /**
    * Request a one-time login token for `email`. Always succeeds (no user
@@ -13,7 +17,7 @@ export class AuthApi {
   async sendToken(email: string): Promise<SendTokenResult> {
     return this.transport.request({
       method: 'POST',
-      path: '/auth/action;send-token',
+      path: (await this.links()).sendToken().href,
       body: { kind: 'json', value: { email } },
       // 204 (real user) returns no body; 200 (test user) returns the token.
       parse: async (res) => (res.status === 204 ? {} : ((await res.json()) as SendTokenResult)),
@@ -27,7 +31,7 @@ export class AuthApi {
   async login(email: string, token: string): Promise<void> {
     return this.transport.request({
       method: 'POST',
-      path: '/auth',
+      path: (await this.links()).login().href,
       headers: { authorization: `X-Token ${email}:${token}` },
       parse: parseVoid,
     });
@@ -46,7 +50,7 @@ export class AuthApi {
   async logout(): Promise<void> {
     return this.transport.request({
       method: 'POST',
-      path: '/auth/action;logout',
+      path: (await this.links()).logout().href,
       parse: parseVoid,
     });
   }
@@ -55,7 +59,7 @@ export class AuthApi {
   async session(): Promise<Session> {
     return this.transport.request({
       method: 'GET',
-      path: '/auth/session',
+      path: (await this.links()).session().href,
       parse: parseJson<Session>,
     });
   }
