@@ -1,0 +1,8 @@
+{
+  // MD024/no-duplicate-heading: allow duplicate headings as long as they
+  // are not siblings (i.e. only flag duplicates under the same parent).
+  "MD013": false,
+  "MD024": {
+    "siblings_only": true
+  }
+}
