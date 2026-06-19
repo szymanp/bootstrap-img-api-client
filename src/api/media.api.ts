@@ -1,6 +1,14 @@
 import type { FolderRefInput, MediaRef } from '../refs';
-import type { Collection, Resource } from '../types/envelope';
-import type { BinaryBody, DownloadResult, MediaListQuery, MediaMetadata, UploadResult } from '../types/media';
+import type { MediaItemVariantName } from '../types/common';
+import type { Collection, MediaItemVariantLink, Resource } from '../types/envelope';
+import type {
+  BinaryBody,
+  DownloadResult,
+  MediaListQuery,
+  MediaMetadata,
+  MediaType,
+  UploadResult,
+} from '../types/media';
 
 export type MediaResource = Resource<MediaMetadata>;
 
@@ -25,6 +33,13 @@ export type TextRefsResult =
   | { notModified: false; collection: Collection<MediaResource>; etag: string | null }
   | { notModified: true; etag: string | null };
 
+export interface MediaItemVariant extends MediaItemVariantLink {
+  /** The name of this variant. E.g. "primary" or "fhd". */
+  name: MediaItemVariantName;
+  /** The type of media (image or video) that this variant represents. */
+  type: MediaType;
+}
+
 /** Media-item endpoints, scoped to a single repository. */
 export interface IMediaApi {
   /**
@@ -41,6 +56,9 @@ export interface IMediaApi {
 
   /** Read a media item's metadata and variant links. */
   metadata(ref: MediaRef): Promise<MediaResource>;
+
+  /** Reads a list of media item variants for this media resource. */
+  getVariants(resource: MediaResource): MediaItemVariant[];
 
   /** List media items in a folder. */
   list(query: MediaListQuery, options?: { acceptLanguage?: string }): Promise<Collection<MediaResource>>;

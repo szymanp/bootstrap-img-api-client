@@ -13,10 +13,7 @@ export interface IRepositoriesApi {
   create(input: CreateRepositoryInput, options?: WriteLanguageOptions): Promise<RepositoryResource>;
 
   /** List repositories the caller has a role on (paginated). */
-  query(
-    query?: PageQuery,
-    options?: Pick<ReadOptions, 'acceptLanguage'>,
-  ): Promise<Collection<RepositoryResource>>;
+  query(query?: PageQuery, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<Collection<RepositoryResource>>;
 
   /** Retrieve a repository. */
   get(repoId: string, options?: ReadOptions): Promise<RepositoryResource>;

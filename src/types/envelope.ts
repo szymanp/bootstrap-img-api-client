@@ -22,8 +22,6 @@ export interface Meta {
 export interface HrefLink {
   rel: string;
   href: string;
-  /** Some links carry extra attributes (e.g. variant width/height, available languages). */
-  [key: string]: unknown;
 }
 
 /** A link whose URL contains `{placeholder}` segments listed in `fields`. */
@@ -31,10 +29,15 @@ export interface TemplateLink {
   rel: string;
   template: string;
   fields: string[];
-  [key: string]: unknown;
 }
 
-export type Link = HrefLink | TemplateLink;
+/** A link to a variant of a media item resource. */
+export interface MediaItemVariantLink extends HrefLink {
+  height: number;
+  width: number;
+}
+
+export type Link = HrefLink | TemplateLink | MediaItemVariantLink;
 
 /** Map of `rel` -> link, as returned by the service root and resource `links`. */
 export type LinkSet = Record<string, Link>;
@@ -42,6 +45,20 @@ export type LinkSet = Record<string, Link>;
 /** Returns true when a link is a template link (has placeholders). */
 export function isTemplateLink(link: Link): link is TemplateLink {
   return typeof (link as TemplateLink).template === 'string';
+}
+
+/** Returns true when a link is an href link. */
+export function isHrefLink(link: Link): link is HrefLink {
+  return typeof (link as HrefLink).href === 'string';
+}
+
+/** Returns true when a link is an href link. */
+export function isMediaItemVariantLink(link: Link): link is MediaItemVariantLink {
+  return (
+    isHrefLink(link) &&
+    typeof (link as MediaItemVariantLink).width === 'number' &&
+    typeof (link as MediaItemVariantLink).height === 'number'
+  );
 }
 
 /** Single-resource envelope. `T` is the payload, `R` the shape of `related`. */

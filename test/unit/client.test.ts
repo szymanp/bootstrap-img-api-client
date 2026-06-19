@@ -305,6 +305,56 @@ describe('media', () => {
     }
   });
 
+  it('extracts image and video variants from a resource, ignoring non-variant links', async () => {
+    const client = makeClient(new MockFetch());
+
+    const resource = {
+      meta: {},
+      data: { id: 'm1' },
+      links: {
+        self: { rel: 'self', href: 'http://localhost:8080/media/repo1/id;m1' },
+        'image:variant:hd': {
+          rel: 'image:variant:hd',
+          href: 'http://localhost:8080/media/repo1/id;m1?size=hd',
+          width: 1280,
+          height: 720,
+        },
+        'video:variant:preview': {
+          rel: 'video:variant:preview',
+          href: 'http://localhost:8080/media/repo1/id;m1?size=preview',
+          width: 640,
+          height: 360,
+        },
+      },
+    };
+
+    const variants = client.media('repo1').getVariants(resource as never);
+
+    expect(variants).toEqual([
+      {
+        rel: 'image:variant:hd',
+        href: 'http://localhost:8080/media/repo1/id;m1?size=hd',
+        width: 1280,
+        height: 720,
+        type: 'image',
+        name: 'hd',
+      },
+      {
+        rel: 'video:variant:preview',
+        href: 'http://localhost:8080/media/repo1/id;m1?size=preview',
+        width: 640,
+        height: 360,
+        type: 'video',
+        name: 'preview',
+      },
+    ]);
+  });
+
+  it('returns an empty list when a resource has no links', async () => {
+    const client = makeClient(new MockFetch());
+    expect(client.media('repo1').getVariants({ meta: {}, data: { id: 'm1' } } as never)).toEqual([]);
+  });
+
   it('surfaces a 304 textrefs conditional GET as notModified', async () => {
     const mock = new MockFetch().enqueue({ status: 304, headers: { etag: '"rev7"' } });
     const client = makeClient(mock);

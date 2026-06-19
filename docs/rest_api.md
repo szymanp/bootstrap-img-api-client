@@ -46,19 +46,19 @@ Error bodies are `application/problem+json`:
 
 The machine-readable `type` is the stable discriminator. Known values:
 
-| `type` | Typical status |
-| --- | --- |
-| `urn:bootstrap:error:bad-request` / `:validation-failed` | 400 / 422 |
-| `urn:bootstrap:error:unauthorized` | 401 |
-| `urn:bootstrap:error:forbidden` | 403 |
-| `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409 |
-| `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
-| `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
-| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` | 404 |
-| `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
-| `urn:bootstrap:error:revision-conflict` | 409 |
-| `urn:bootstrap:error:unsupported-media-type` | 415 |
-| `urn:bootstrap:error:internal-error` | 500 |
+| `type`                                                                                                          | Typical status  |
+| --------------------------------------------------------------------------------------------------------------- | --------------- |
+| `urn:bootstrap:error:bad-request` / `:validation-failed`                                                        | 400 / 422       |
+| `urn:bootstrap:error:unauthorized`                                                                              | 401             |
+| `urn:bootstrap:error:forbidden`                                                                                 | 403             |
+| `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409       |
+| `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired`               | 400 / 401 / 404 |
+| `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict`                                        | 404 / 409       |
+| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found`                                             | 404             |
+| `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists`                                       | 404 / 409       |
+| `urn:bootstrap:error:revision-conflict`                                                                         | 409             |
+| `urn:bootstrap:error:unsupported-media-type`                                                                    | 415             |
+| `urn:bootstrap:error:internal-error`                                                                            | 500             |
 
 ---
 
@@ -88,8 +88,8 @@ Each link is one of two kinds:
 {
   "links": {
     "repos:create": { "rel": "repos:create", "href": "/repos" },
-    "repos:query":  { "rel": "repos:query", "href": "/repos;query" },
-    "repos:read":   { "rel": "repos:read", "template": "/repos/{repoId}", "fields": ["repoId"] }
+    "repos:query": { "rel": "repos:query", "href": "/repos;query" },
+    "repos:read": { "rel": "repos:read", "template": "/repos/{repoId}", "fields": ["repoId"] }
   }
 }
 ```
@@ -154,7 +154,7 @@ Returns details about the current session.
   "principal": "<uuid>",
   "email": "user@example.com",
   "createdAt": "2026-01-01T00:00:00Z",
-  "expiresAt":  "2026-01-08T00:00:00Z"
+  "expiresAt": "2026-01-08T00:00:00Z"
 }
 ```
 
@@ -318,10 +318,10 @@ Deletes a repository.
 
 Folders are addressed with a `{folderVar}` path segment:
 
-| Format | Example | Resolves to |
-| --- | --- | --- |
-| `id;<uuid>` | `id;a1b2c3…` | Folder with that UUID |
-| `path;el1;el2` | `path;albums;vacation` | `/albums/vacation` |
+| Format         | Example                | Resolves to           |
+| -------------- | ---------------------- | --------------------- |
+| `id;<uuid>`    | `id;a1b2c3…`           | Folder with that UUID |
+| `path;el1;el2` | `path;albums;vacation` | `/albums/vacation`    |
 
 In JSON bodies, folder references use:
 
@@ -584,11 +584,11 @@ Adds, removes, or modifies folder permissions.
 
 A **principal** is one of:
 
-| Form | Meaning |
-| --- | --- |
+| Form                                              | Meaning                     |
+| ------------------------------------------------- | --------------------------- |
 | `{ "type": "user", "email": "user@example.com" }` | A registered user, by email |
-| `{ "type": "anonymous" }` | Any unauthenticated caller |
-| `{ "type": "link", "id": "<principal-uuid>" }` | A shared-link principal |
+| `{ "type": "anonymous" }`                         | Any unauthenticated caller  |
+| `{ "type": "link", "id": "<principal-uuid>" }`    | A shared-link principal     |
 
 Valid `permission` values: `view`, `read`, `write`, `publish`, `share`.
 Valid `effect` values: `grant` (add the permission) or `default` (reset to the inherited default, i.e. remove the explicit grant).
@@ -644,14 +644,14 @@ Queries the folder's direct media-item membership — the set of media items lin
 #### Request body
 
 ```json5
-{ 
-  "query": {
+{
+  query: {
     /* Optional offset for paging. */
-    "offset": 0,
+    offset: 0,
     /* Optional limit for paging. */
-    "limit": 20,
+    limit: 20,
     /* Optional wildcard to filter filenames on. */
-    "filename": "*.jpg",
+    filename: '*.jpg',
     /**
       Specifies the ordering of the results.
       Possible values for "property":
@@ -661,11 +661,11 @@ Queries the folder's direct media-item membership — the set of media items lin
       - "ascending"
       - "descending"
     */
-    "orderBy": {
-      "property": "filename",
-      "order": "ascending"
-    }
-  }
+    orderBy: {
+      property: 'filename',
+      order: 'ascending',
+    },
+  },
 }
 ```
 
@@ -731,11 +731,11 @@ Applies an ordered list of patches to the folder's direct media-item membership 
 
 Each patch is one of:
 
-| Form | Effect |
-| --- | --- |
-| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename. |
-| `{ "op": "remove", "id": "<uuid>" }` | Unlink the media item with the given ID. No-op if not linked. |
-| `{ "op": "remove", "filename": "<name>" }` | Unlink whichever media item is linked under that filename. No-op if no such link. |
+| Form                                                    | Effect                                                                            |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename.                                     |
+| `{ "op": "remove", "id": "<uuid>" }`                    | Unlink the media item with the given ID. No-op if not linked.                     |
+| `{ "op": "remove", "filename": "<name>" }`              | Unlink whichever media item is linked under that filename. No-op if no such link. |
 
 #### Response body
 

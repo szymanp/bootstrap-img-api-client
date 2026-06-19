@@ -3,6 +3,9 @@
 /** A BCP-47 language tag (e.g. `en-US`). The server normalises to lowercase. */
 export type LanguageTag = string;
 
+/** A name of a variant of a media item. E.g. "primary" or "fhd". */
+export type MediaItemVariantName = string;
+
 /**
  * A localized string value.
  * - `standard` representation: a single negotiated string.

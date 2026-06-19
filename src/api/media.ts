@@ -1,11 +1,12 @@
 import { parseJson, Transport } from '../http/transport';
 import type { LinksProvider, ServiceLinks } from '../links';
 import type { FolderRefInput, MediaRef } from '../refs';
-import type { Collection, HrefLink } from '../types/envelope';
+import { isMediaItemVariantLink, type Collection, type HrefLink } from '../types/envelope';
 import type { BinaryBody, DownloadResult, MediaListQuery, UploadResult } from '../types/media';
 import type {
   DownloadOptions,
   IMediaApi,
+  MediaItemVariant,
   MediaResource,
   TextRefsOptions,
   TextRefsResult,
@@ -85,6 +86,31 @@ export class MediaApi implements IMediaApi {
     });
   }
 
+  getVariants(resource: MediaResource): MediaItemVariant[] {
+    if (!resource.links) {
+      return [];
+    }
+
+    const links = Object.values(resource.links).filter(isMediaItemVariantLink);
+
+    return [
+      ...links
+        .filter((link) => link.rel.startsWith(Rels.IMAGE_VARIANT_PREFIX))
+        .map((link) => ({
+          ...link,
+          type: 'image' as const,
+          name: link.rel.substring(Rels.IMAGE_VARIANT_PREFIX.length),
+        })),
+      ...links
+        .filter((link) => link.rel.startsWith(Rels.VIDEO_VARIANT_PREFIX))
+        .map((link) => ({
+          ...link,
+          type: 'video' as const,
+          name: link.rel.substring(Rels.VIDEO_VARIANT_PREFIX.length),
+        })),
+    ];
+  }
+
   /** List media items in a folder. */
   async list(query: MediaListQuery, options: { acceptLanguage?: string } = {}): Promise<Collection<MediaResource>> {
     return this.transport.request({
@@ -120,3 +146,8 @@ export class MediaApi implements IMediaApi {
     });
   }
 }
+
+const Rels = {
+  IMAGE_VARIANT_PREFIX: 'image:variant:',
+  VIDEO_VARIANT_PREFIX: 'video:variant:',
+};

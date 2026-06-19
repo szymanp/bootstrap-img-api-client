@@ -71,10 +71,7 @@ export interface IFoldersApi {
   delete(ref: FolderRefInput, revision: string): Promise<void>;
 
   /** List root-level folders the caller can reach. */
-  listRoot(
-    query?: PageQuery,
-    options?: Pick<ReadOptions, 'acceptLanguage'>,
-  ): Promise<Collection<FolderResource>>;
+  listRoot(query?: PageQuery, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<Collection<FolderResource>>;
 
   /** List direct children of a folder. */
   list(
@@ -108,10 +105,7 @@ export interface IFoldersApi {
   ): Promise<PutTextResult>;
 
   /** List all permissions on a folder. */
-  getPermissions(
-    ref: FolderRefInput,
-    options?: Pick<ReadOptions, 'acceptLanguage'>,
-  ): Promise<PermissionsCollection>;
+  getPermissions(ref: FolderRefInput, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<PermissionsCollection>;
 
   /** Add, remove, or modify folder permissions. */
   patchPermissions(
