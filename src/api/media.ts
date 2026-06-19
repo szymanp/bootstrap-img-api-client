@@ -14,6 +14,19 @@ export interface DownloadOptions {
   ifNoneMatch?: string | string[];
 }
 
+/** Options for {@link MediaApi.textRefs}. */
+export interface TextRefsOptions {
+  /** Language version of the folder text to resolve references against. */
+  acceptLanguage?: string;
+  /** `If-None-Match` value(s) for a conditional GET (the ETag tracks the folder revision). */
+  ifNoneMatch?: string | string[];
+}
+
+/** A media-by-text-references listing (200) or a not-modified result (304). */
+export type TextRefsResult =
+  | { notModified: false; collection: Collection<MediaResource>; etag: string | null }
+  | { notModified: true; etag: string | null };
+
 /** Media-item endpoints, scoped to a single repository. */
 export class MediaApi {
   constructor(
@@ -96,6 +109,30 @@ export class MediaApi {
       acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: query },
       parse: parseJson<Collection<MediaResource>>,
+    });
+  }
+
+  /**
+   * List every media item referenced in the text body of `folder` (the
+   * resolved `mid:`/`img:` references). The language is selected from
+   * `acceptLanguage` (defaulting to the client's language). Supports a
+   * conditional GET via `ifNoneMatch`; an ETag match yields `notModified: true`.
+   */
+  async textRefs(folder: FolderRefInput, options: TextRefsOptions = {}): Promise<TextRefsResult> {
+    const ifNoneMatch = Array.isArray(options.ifNoneMatch) ? options.ifNoneMatch.join(', ') : options.ifNoneMatch;
+    return this.transport.request({
+      method: 'GET',
+      path: (await this.links()).mediaTextRefs(this.repoId, folder).href,
+      acceptLanguage: options.acceptLanguage,
+      headers: { 'if-none-match': ifNoneMatch },
+      allowStatuses: [304],
+      parse: async (res): Promise<TextRefsResult> => {
+        const etag = res.headers.get('etag');
+        if (res.status === 304) {
+          return { notModified: true, etag };
+        }
+        return { notModified: false, collection: (await res.json()) as Collection<MediaResource>, etag };
+      },
     });
   }
 }

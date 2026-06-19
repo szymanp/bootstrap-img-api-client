@@ -78,6 +78,11 @@ export const serviceRootFixture: ServiceRoot = {
     },
     'repos:update': { rel: 'repos:update', template: '/repos/{repoId}', fields: ['repoId'] },
     'media:list': { rel: 'media:list', template: '/media/{repoId}/action;list', fields: ['repoId'] },
+    'media:textrefs': {
+      rel: 'media:textrefs',
+      template: '/media/{repoId}/query;textrefs={folderIdOrPath}',
+      fields: ['repoId', 'folderIdOrPath'],
+    },
     'media:download': {
       rel: 'media:download',
       template: '/media/{repoId}/{folderIdOrPath}/{filename}',

@@ -516,21 +516,38 @@ Returns the folder's full markdown body. The translation is selected from the fo
 
 Stores the request body as the folder's text content under the request's `Content-Language`. Other languages already present on the folder are preserved. Uses optimistic concurrency: the supplied revision must match the folder's current revision.
 
+The markdown body is scanned for references to other folders and media items (`mid:`/`img:`/`folderid:`/`folder:`). Resolved references are persisted (keyed by repository, folder, and language; the previous set for that language is cleared and replaced); references that do not resolve to an existing folder/media item are ignored but reported in the response. See [folder_text.md](folder_text.md) for the reference forms and resolution rules.
+
 #### Request headers
 
 - `Content-Type: text/markdown`
 - `Content-Language` — language to store the body under (falls back to default when omitted)
 - `Revision-Id: <current-revision>` (required)
 
-#### Response body: raw markdown text
+#### Response body
+
+```json
+{
+  "meta": { "revision": "<new-revision>" },
+  "validation": {
+    "unresolvedReferences": [
+      { "type": "media", "reference": "img:./missing.jpg" },
+      { "type": "folder", "reference": "folder:../nope" }
+    ]
+  }
+}
+```
+
+`unresolvedReferences` is empty when every reference resolved. Each entry's `type` is `media` (for `mid:`/`img:`) or `folder` (for `folderid:`/`folder:`), and `reference` is the original `scheme:target` text.
 
 #### Response headers
 
+- `Content-Type: application/json`
 - `Revision-Id: <new-revision>` — the folder's revision after the update
 
 #### Responses
 
-- `204 No Content`
+- `200 OK` — body stored; validation result returned
 - `400 Bad Request` — missing or unparseable `Revision-Id`
 - `403 Forbidden` — caller lacks write permission
 - `404 Not Found`
@@ -826,7 +843,7 @@ Returns metadata by stable media item ID.
 
 Lists media items in a folder.
 
-#### Response body
+#### Request body
 
 ```json
 {
@@ -844,8 +861,64 @@ Lists media items in a folder.
 
 All fields except `folder` are optional.
 
+#### Response body
+
+```json
+{
+  "meta": {
+    "offset": null,
+    "limit": 30
+  },
+  "records": [
+    {
+      "meta": {},
+      "data": {
+          "id": "fe181a56-2e8a-4690-98d4-864a5b87645e",
+          "type": "image",
+          "visibility": "normal"
+      },
+      "links": {
+          "image:variant:hd": {
+              "rel": "image:variant:hd",
+              "href": "...",
+              "width": 1280,
+              "height": 720
+          },
+          ...
+          "self": {
+              "rel": "self",
+              "href": "..."
+          }
+      }
+    },
+    ...
+  ]
+}
+```
+
 #### Responses
 
 - `200 OK` — array of media records with metadata and variant links
+- `403 Forbidden` — caller lacks read permission on the folder
 - `404 Not Found` — folder not found
 - `422 Unprocessable Entity` — folder path not found
+
+---
+
+### GET /media/{repoId}/query;textrefs={folderVar}
+
+Lists all media items that are referenced in the text body of the given folder.
+
+The request requires an `Accept-Language` header to select the right language version of the text.
+It supports a conditional GET via `If-None-Match` / `ETag`, where the `Etag` is correlated with the revision ID of the folder.
+
+#### Response body
+
+Same as `POST /media/{repoId}/action;list`.
+
+#### Responses
+
+- `200 OK` — array of media records with metadata and variant links
+- `304 Not Modified` — ETag matches
+- `403 Forbidden` — caller lacks read permission on the folder
+- `404 Not Found` — folder not found

@@ -19,6 +19,11 @@ const links: LinkSet = {
     template: '/media/{repoId}/{mediaItemId}',
     fields: ['repoId', 'mediaItemId'],
   },
+  'media:textrefs': {
+    rel: 'media:textrefs',
+    template: '/media/{repoId}/query;textrefs={folderIdOrPath}',
+    fields: ['repoId', 'folderIdOrPath'],
+  },
   'users:verify-user': {
     rel: 'users:verify-user',
     template: '/users/{userIdOrEmail}/action;verify-user',
@@ -49,6 +54,13 @@ describe('ServiceLinks', () => {
     expect(sl.uploadMedia('repo', 'photos', 'a b.jpg')).toEqual({
       rel: 'media:upload',
       href: '/media/repo/path;photos/a%20b.jpg',
+    });
+  });
+
+  it('builds the textrefs media link with a folder ref segment', () => {
+    expect(sl.mediaTextRefs('repo', FolderRef.path('/albums/trip'))).toEqual({
+      rel: 'media:textrefs',
+      href: '/media/repo/query;textrefs=path;albums;trip',
     });
   });
 

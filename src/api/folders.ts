@@ -34,6 +34,26 @@ export interface FolderText {
   revision: string | null;
 }
 
+/** A markdown reference that did not resolve to an existing folder/media item. */
+export interface UnresolvedReference {
+  /** `media` for `mid:`/`img:` references, `folder` for `folderid:`/`folder:`. */
+  type: 'media' | 'folder';
+  /** The original `scheme:target` reference text. */
+  reference: string;
+}
+
+/** Result of storing a folder's markdown body via {@link FoldersApi.putText}. */
+export interface PutTextResult {
+  /** The folder's revision after the update (from `Revision-Id` / `meta.revision`). */
+  revision: string | null;
+  /**
+   * References found in the body that did not resolve to an existing folder or
+   * media item; empty when every reference resolved. Resolved references are
+   * persisted server-side.
+   */
+  unresolvedReferences: UnresolvedReference[];
+}
+
 /** Folder endpoints, scoped to a single repository. */
 export class FoldersApi {
   constructor(
@@ -156,22 +176,33 @@ export class FoldersApi {
 
   /**
    * Store the folder's markdown body under `Content-Language`, preserving other
-   * languages. `revision` must match the folder's current revision. Returns the
-   * new revision (from the `Revision-Id` response header).
+   * languages. `revision` must match the folder's current revision. The body is
+   * scanned for `mid:`/`img:`/`folderid:`/`folder:` references: resolved ones
+   * are persisted, and any that don't resolve are returned in
+   * {@link PutTextResult.unresolvedReferences}. Returns the new revision.
    */
   async putText(
     ref: FolderRefInput,
     markdown: string,
     revision: string,
     options: Pick<WriteLanguageOptions, 'contentLanguage'> = {},
-  ): Promise<{ revision: string | null }> {
+  ): Promise<PutTextResult> {
     return this.transport.request({
       method: 'PUT',
       path: (await this.links()).updateFolderText(this.repoId, ref).href,
       contentLanguage: options.contentLanguage ?? this.transport.defaultLanguage,
       headers: { 'revision-id': revision },
       body: { kind: 'markdown', value: markdown },
-      parse: (res) => ({ revision: res.headers.get('revision-id') }),
+      parse: async (res) => {
+        const body = (await res.json()) as {
+          meta?: { revision?: string };
+          validation?: { unresolvedReferences?: UnresolvedReference[] };
+        };
+        return {
+          revision: res.headers.get('revision-id') ?? body.meta?.revision ?? null,
+          unresolvedReferences: body.validation?.unresolvedReferences ?? [],
+        };
+      },
     });
   }
 

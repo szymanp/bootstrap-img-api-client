@@ -13,8 +13,16 @@ export {
   type FolderText,
   type MediaMembershipCollection,
   type PermissionsCollection,
+  type PutTextResult,
+  type UnresolvedReference,
 } from './api/folders';
-export { MediaApi, type DownloadOptions, type MediaResource } from './api/media';
+export {
+  MediaApi,
+  type DownloadOptions,
+  type MediaResource,
+  type TextRefsOptions,
+  type TextRefsResult,
+} from './api/media';
 export { ServiceRootApi, type ServiceRoot } from './api/service-root';
 export { ServiceLinks } from './links';
 

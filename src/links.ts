@@ -169,6 +169,11 @@ export class ServiceLinks {
     return this.resolve('media:list', { repoId: encode(repoId) });
   }
 
+  /** `media:textrefs` — list media referenced in a folder's text body. */
+  mediaTextRefs(repoId: string, folder: FolderRefInput): HrefLink {
+    return this.resolve('media:textrefs', this.folderFields(repoId, folder));
+  }
+
   /** `media:download-by-id` — download a media binary by its stable id. */
   downloadMediaById(repoId: string, mediaItemId: string): HrefLink {
     return this.resolve('media:download-by-id', { repoId: encode(repoId), mediaItemId: midSegment(mediaItemId) });

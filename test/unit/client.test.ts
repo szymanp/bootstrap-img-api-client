@@ -222,8 +222,20 @@ describe('folders', () => {
     expect(text.contentLanguage).toBe('en-us');
   });
 
-  it('writes text with a Revision-Id request header and returns the new revision', async () => {
-    const mock = new MockFetch().enqueue({ status: 204, headers: { 'revision-id': 'rev10' } });
+  it('writes text with a Revision-Id request header and returns the new revision and unresolved refs', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      headers: { 'revision-id': 'rev10' },
+      json: {
+        meta: { revision: 'rev10' },
+        validation: {
+          unresolvedReferences: [
+            { type: 'media', reference: 'img:./missing.jpg' },
+            { type: 'folder', reference: 'folder:../nope' },
+          ],
+        },
+      },
+    });
     const client = makeClient(mock);
 
     const result = await client.folders('repo1').putText({ id: 'f1' }, '# Body', 'rev9');
@@ -231,6 +243,22 @@ describe('folders', () => {
     expect(mock.last.headers.get('revision-id')).toBe('rev9');
     expect(mock.last.headers.get('content-type')).toContain('text/markdown');
     expect(result.revision).toBe('rev10');
+    expect(result.unresolvedReferences).toEqual([
+      { type: 'media', reference: 'img:./missing.jpg' },
+      { type: 'folder', reference: 'folder:../nope' },
+    ]);
+  });
+
+  it('defaults unresolvedReferences to empty when validation is absent', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      headers: { 'revision-id': 'rev10' },
+      json: { meta: { revision: 'rev10' } },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.folders('repo1').putText({ id: 'f1' }, '# Body', 'rev9');
+    expect(result.unresolvedReferences).toEqual([]);
   });
 });
 
@@ -256,6 +284,35 @@ describe('media', () => {
     expect(result.notModified).toBe(true);
     expect(result.etag).toBe('"abc"');
     expect(mock.last.headers.get('if-none-match')).toBe('"abc"');
+  });
+
+  it('lists media referenced in a folder text body', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      headers: { etag: '"rev7"' },
+      json: { meta: { offset: null, limit: 30 }, records: [{ meta: {}, data: { id: 'm1' }, links: {} }] },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.media('repo1').textRefs({ path: 'albums/trip' }, { acceptLanguage: 'pl-PL' });
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/query;textrefs=path;albums;trip');
+    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
+    expect(result.notModified).toBe(false);
+    if (!result.notModified) {
+      expect(result.collection.records[0]?.data.id).toBe('m1');
+      expect(result.etag).toBe('"rev7"');
+    }
+  });
+
+  it('surfaces a 304 textrefs conditional GET as notModified', async () => {
+    const mock = new MockFetch().enqueue({ status: 304, headers: { etag: '"rev7"' } });
+    const client = makeClient(mock);
+
+    const result = await client.media('repo1').textRefs({ id: 'f1' }, { ifNoneMatch: '"rev7"' });
+    expect(mock.last.headers.get('if-none-match')).toBe('"rev7"');
+    expect(result.notModified).toBe(true);
+    expect(result.etag).toBe('"rev7"');
   });
 });
 
