@@ -50,10 +50,16 @@ Layered, with a thin low-level transport under typed resource APIs:
   `WriteLanguageOptions`), and per-resource payload types.
 - `src/api/` — one class per resource group (`auth`, `users`, `repositories`,
   `folders`, `media`, `service-root`). Folders/media are repo-scoped and constructed
-  with `(transport, repoId)`.
+  with `(transport, repoId)`. Each class implements an `I*Api` interface declared in a
+  sibling `*.api.ts` file (e.g. `auth.ts` → `auth.api.ts`'s `IAuthApi`); the interface
+  is the user-facing type, and the shared payload/result types (`FolderResource`,
+  `PutTextResult`, etc.) live in the `.api.ts` file alongside it.
 - `src/client.ts` — `BootstrapClient` wires it together: `auth`, `users`, `repos`,
-  `serviceRoot` properties plus `folders(repoId)` / `media(repoId)` factories.
-- `src/index.ts` — the public barrel; the only entry point consumers import from.
+  `serviceRoot` properties plus `folders(repoId)` / `media(repoId)` factories, all typed
+  as the `I*Api` interfaces rather than the concrete classes.
+- `src/index.ts` — the public barrel; the only entry point consumers import from. It
+  exports the `I*Api` interfaces (not the API classes), which consumers reach through
+  `BootstrapClient`.
 
 ## Conventions specific to this API
 
@@ -75,6 +81,9 @@ Layered, with a thin low-level transport under typed resource APIs:
 - ESM source with extensionless relative import specifiers (allowed by `moduleResolution:
 Bundler`; tsup/vitest bundle and tsc only typechecks). `type`-only imports use `import type`.
 - Zero runtime dependencies — keep it that way so the bundle stays Angular-friendly.
+- When adding or changing an endpoint, update both the class method and its `I*Api`
+  interface entry (with the doc comment on the interface), and export any new payload
+  type from the `.api.ts` file via the barrel.
 - Add unit tests in `test/unit/` using the scripted `MockFetch` (`test/unit/mock-fetch.ts`);
   assert on URL, method, headers, and request body. Mirror real flows in
   `test/integration/` when behavior depends on the live server.

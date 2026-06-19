@@ -2,14 +2,13 @@ import { fieldsParam, readParams } from '../http/language';
 import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
 import type { ReadOptions, WriteLanguageOptions } from '../types/common';
-import type { Collection, Resource } from '../types/envelope';
+import type { Collection } from '../types/envelope';
 import type { PageQuery } from '../types/envelope';
-import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from '../types/repositories';
-
-export type RepositoryResource = Resource<Repository>;
+import type { CreateRepositoryInput, UpdateRepositoryInput } from '../types/repositories';
+import type { IRepositoriesApi, RepositoryResource } from './repositories.api';
 
 /** Repository endpoints. */
-export class RepositoriesApi {
+export class RepositoriesApi implements IRepositoriesApi {
   constructor(
     private readonly transport: Transport,
     private readonly links: LinksProvider,

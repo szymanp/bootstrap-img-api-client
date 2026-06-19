@@ -3,27 +3,27 @@
 export { BootstrapClient } from './client';
 export type { ClientOptions, FetchLike } from './config';
 
-// Resource APIs (for typing references to the sub-clients).
-export { AuthApi } from './api/auth';
-export { UsersApi } from './api/users';
-export { RepositoriesApi, type RepositoryResource } from './api/repositories';
-export {
-  FoldersApi,
-  type FolderResource,
-  type FolderText,
-  type MediaMembershipCollection,
-  type PermissionsCollection,
-  type PutTextResult,
-  type UnresolvedReference,
-} from './api/folders';
-export {
-  MediaApi,
-  type DownloadOptions,
-  type MediaResource,
-  type TextRefsOptions,
-  type TextRefsResult,
-} from './api/media';
-export { ServiceRootApi, type ServiceRoot } from './api/service-root';
+// Resource API interfaces (the user-facing types for the sub-clients).
+export type { IAuthApi } from './api/auth.api';
+export type { IUsersApi } from './api/users.api';
+export type { IRepositoriesApi, RepositoryResource } from './api/repositories.api';
+export type {
+  IFoldersApi,
+  FolderResource,
+  FolderText,
+  MediaMembershipCollection,
+  PermissionsCollection,
+  PutTextResult,
+  UnresolvedReference,
+} from './api/folders.api';
+export type {
+  IMediaApi,
+  DownloadOptions,
+  MediaResource,
+  TextRefsOptions,
+  TextRefsResult,
+} from './api/media.api';
+export type { IServiceRootApi, ServiceRoot } from './api/service-root.api';
 export { ServiceLinks } from './links';
 
 // References.

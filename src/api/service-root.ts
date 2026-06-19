@@ -1,14 +1,10 @@
 import { parseJson, Transport } from '../http/transport';
-import { isTemplateLink, type Link, type LinkSet } from '../types/envelope';
+import { isTemplateLink, type Link } from '../types/envelope';
 import { ServiceLinks } from '../links';
-
-/** Body of `GET /` — a `links` envelope advertising every endpoint. */
-export interface ServiceRoot {
-  links: LinkSet;
-}
+import type { IServiceRootApi, ServiceRoot } from './service-root.api';
 
 /** Service-root discovery. Clients can follow links instead of hard-coding paths. */
-export class ServiceRootApi {
+export class ServiceRootApi implements IServiceRootApi {
   #serviceRootResponse: ServiceRoot | undefined;
   #links: ServiceLinks | undefined;
 

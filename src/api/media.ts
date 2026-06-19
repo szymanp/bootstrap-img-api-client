@@ -1,34 +1,18 @@
 import { parseJson, Transport } from '../http/transport';
 import type { LinksProvider, ServiceLinks } from '../links';
 import type { FolderRefInput, MediaRef } from '../refs';
-import type { Collection, HrefLink, Resource } from '../types/envelope';
-import type { BinaryBody, DownloadResult, MediaListQuery, MediaMetadata, UploadResult } from '../types/media';
-
-export type MediaResource = Resource<MediaMetadata>;
-
-/** Options for downloading a media binary. */
-export interface DownloadOptions {
-  /** Variant name (e.g. `thumbnail`, `medium`) instead of the original. */
-  size?: string;
-  /** `If-None-Match` value(s) for a conditional GET. */
-  ifNoneMatch?: string | string[];
-}
-
-/** Options for {@link MediaApi.textRefs}. */
-export interface TextRefsOptions {
-  /** Language version of the folder text to resolve references against. */
-  acceptLanguage?: string;
-  /** `If-None-Match` value(s) for a conditional GET (the ETag tracks the folder revision). */
-  ifNoneMatch?: string | string[];
-}
-
-/** A media-by-text-references listing (200) or a not-modified result (304). */
-export type TextRefsResult =
-  | { notModified: false; collection: Collection<MediaResource>; etag: string | null }
-  | { notModified: true; etag: string | null };
+import type { Collection, HrefLink } from '../types/envelope';
+import type { BinaryBody, DownloadResult, MediaListQuery, UploadResult } from '../types/media';
+import type {
+  DownloadOptions,
+  IMediaApi,
+  MediaResource,
+  TextRefsOptions,
+  TextRefsResult,
+} from './media.api';
 
 /** Media-item endpoints, scoped to a single repository. */
-export class MediaApi {
+export class MediaApi implements IMediaApi {
   constructor(
     private readonly transport: Transport,
     private readonly repoId: string,

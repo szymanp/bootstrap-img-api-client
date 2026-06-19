@@ -1,9 +1,10 @@
 import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
 import type { SendTokenResult, Session } from '../types/auth';
+import type { IAuthApi } from './auth.api';
 
 /** Authentication & session endpoints. */
-export class AuthApi {
+export class AuthApi implements IAuthApi {
   constructor(
     private readonly transport: Transport,
     private readonly links: LinksProvider,

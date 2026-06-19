@@ -1,4 +1,4 @@
-import type { ServiceRoot } from './api/service-root';
+import type { ServiceRoot } from './api/service-root.api';
 import type { CredentialStore } from './http/credentials';
 import type { LanguageTag } from './types/common';
 

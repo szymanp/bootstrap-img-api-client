@@ -1,8 +1,9 @@
 import { parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
+import type { IUsersApi } from './users.api';
 
 /** User registration & verification endpoints. */
-export class UsersApi {
+export class UsersApi implements IUsersApi {
   constructor(
     private readonly transport: Transport,
     private readonly links: LinksProvider,

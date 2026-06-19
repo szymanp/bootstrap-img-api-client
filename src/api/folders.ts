@@ -3,11 +3,9 @@ import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
 import { type FolderRefInput } from '../refs';
 import type { ReadOptions, WriteLanguageOptions } from '../types/common';
-import type { Collection, PageQuery, Resource } from '../types/envelope';
+import type { Collection, PageQuery } from '../types/envelope';
 import type {
   CreateFolderInput,
-  Folder,
-  FolderRelated,
   MediaMembership,
   MediaMembershipPatch,
   MediaMembershipQuery,
@@ -15,47 +13,18 @@ import type {
   TreeQuery,
   UpdateFolderInput,
 } from '../types/folders';
-import type { MediaMetadata } from '../types/media';
-
-export type FolderResource = Resource<Folder, FolderRelated>;
-export type PermissionsCollection = Collection<Resource<PermissionRecord>, { folder?: FolderResource[] }>;
-/** Result of a media-membership query: membership records plus the full media-item resources. */
-export type MediaMembershipCollection = Collection<
-  Resource<MediaMembership>,
-  { mediaitem?: Resource<MediaMetadata>[] }
->;
-
-/** Full markdown body of a folder's `text` subresource plus its metadata. */
-export interface FolderText {
-  text: string;
-  /** Language the returned text is in (from `Content-Language`). */
-  contentLanguage: string | null;
-  /** The folder's current revision (from `Revision-Id`); pass back on writes. */
-  revision: string | null;
-}
-
-/** A markdown reference that did not resolve to an existing folder/media item. */
-export interface UnresolvedReference {
-  /** `media` for `mid:`/`img:` references, `folder` for `folderid:`/`folder:`. */
-  type: 'media' | 'folder';
-  /** The original `scheme:target` reference text. */
-  reference: string;
-}
-
-/** Result of storing a folder's markdown body via {@link FoldersApi.putText}. */
-export interface PutTextResult {
-  /** The folder's revision after the update (from `Revision-Id` / `meta.revision`). */
-  revision: string | null;
-  /**
-   * References found in the body that did not resolve to an existing folder or
-   * media item; empty when every reference resolved. Resolved references are
-   * persisted server-side.
-   */
-  unresolvedReferences: UnresolvedReference[];
-}
+import type {
+  FolderResource,
+  FolderText,
+  IFoldersApi,
+  MediaMembershipCollection,
+  PermissionsCollection,
+  PutTextResult,
+  UnresolvedReference,
+} from './folders.api';
 
 /** Folder endpoints, scoped to a single repository. */
-export class FoldersApi {
+export class FoldersApi implements IFoldersApi {
   constructor(
     private readonly transport: Transport,
     private readonly repoId: string,

@@ -1,9 +1,15 @@
 import { AuthApi } from './api/auth';
+import type { IAuthApi } from './api/auth.api';
 import { FoldersApi } from './api/folders';
+import type { IFoldersApi } from './api/folders.api';
 import { MediaApi } from './api/media';
+import type { IMediaApi } from './api/media.api';
 import { RepositoriesApi } from './api/repositories';
+import type { IRepositoriesApi } from './api/repositories.api';
 import { ServiceRootApi } from './api/service-root';
+import type { IServiceRootApi } from './api/service-root.api';
 import { UsersApi } from './api/users';
+import type { IUsersApi } from './api/users.api';
 import { resolveConfig, type ClientOptions } from './config';
 import { defaultCredentialStore, type CredentialStore } from './http/credentials';
 import { Transport } from './http/transport';
@@ -30,10 +36,10 @@ export class BootstrapClient {
   /** The active credential store (cookie jar in Node, browser passthrough in the browser). */
   readonly credentials: CredentialStore;
 
-  readonly serviceRoot: ServiceRootApi;
-  readonly auth: AuthApi;
-  readonly users: UsersApi;
-  readonly repos: RepositoriesApi;
+  readonly serviceRoot: IServiceRootApi;
+  readonly auth: IAuthApi;
+  readonly users: IUsersApi;
+  readonly repos: IRepositoriesApi;
 
   /** Lazily resolves (and caches) the typed link builder from the service root. */
   private readonly links: LinksProvider;
@@ -52,12 +58,12 @@ export class BootstrapClient {
   }
 
   /** Folder endpoints scoped to a repository. */
-  folders(repoId: string): FoldersApi {
+  folders(repoId: string): IFoldersApi {
     return new FoldersApi(this.transport, repoId, this.links);
   }
 
   /** Media-item endpoints scoped to a repository. */
-  media(repoId: string): MediaApi {
+  media(repoId: string): IMediaApi {
     return new MediaApi(this.transport, repoId, this.links);
   }
 }
