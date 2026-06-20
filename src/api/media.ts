@@ -23,27 +23,58 @@ export class MediaApi implements IMediaApi {
   /** Resolve the download link for a media ref, picking the by-id or by-file relation. */
   private downloadLink(links: ServiceLinks, ref: MediaRef): HrefLink {
     const addr = ref.addressing;
-    return addr.kind === 'id'
-      ? links.downloadMediaById(this.repoId, addr.mediaItemId)
-      : links.downloadMedia(this.repoId, addr.folder, addr.filename);
+    switch (addr.kind) {
+      case 'id':
+        return links.downloadMediaById(this.repoId, addr.mediaItemId);
+      case 'file':
+        return links.downloadMedia(this.repoId, addr.folder, addr.filename);
+      case 'sha256':
+        throw new Error('A sha256 media reference can only be used for metadata lookups, not downloads.');
+    }
   }
 
-  /** Resolve the metadata link for a media ref, picking the by-id or by-file relation. */
+  /** Resolve the metadata link for a media ref, picking the by-id, by-file, or by-hash relation. */
   private metadataLink(links: ServiceLinks, ref: MediaRef): HrefLink {
     const addr = ref.addressing;
-    return addr.kind === 'id'
-      ? links.mediaMetadataById(this.repoId, addr.mediaItemId)
-      : links.mediaMetadata(this.repoId, addr.folder, addr.filename);
+    switch (addr.kind) {
+      case 'id':
+        return links.mediaMetadataById(this.repoId, addr.mediaItemId);
+      case 'file':
+        return links.mediaMetadata(this.repoId, addr.folder, addr.filename);
+      case 'sha256':
+        return links.mediaMetadataBySha256(this.repoId, addr.hash);
+    }
   }
 
   /**
    * Upload a media item into a folder under `filename`. `contentType` must be an
    * `image/*` or `video/*` type. Returns the assigned media-item id.
    */
-  async upload(folder: FolderRefInput, filename: string, body: BinaryBody, contentType: string): Promise<UploadResult> {
+  async uploadToFolder(
+    folder: FolderRefInput,
+    filename: string,
+    body: BinaryBody,
+    contentType: string,
+  ): Promise<UploadResult> {
     return this.transport.request({
       method: 'PUT',
       path: (await this.links()).uploadMedia(this.repoId, folder, filename).href,
+      body: { kind: 'binary', value: body, contentType },
+      parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? '' }),
+    });
+  }
+
+  /**
+   * Upload a media item under a known stable id. `contentType` must be an
+   * `image/*` or `video/*` type. The user must be a repository owner or editor.
+   * Throws an {@link ApiError} with status `409` if an item already exists at
+   * that id whose original blob differs from the uploaded binary. Returns the
+   * media-item id echoed by the server.
+   */
+  async uploadById(mediaItemId: string, body: BinaryBody, contentType: string): Promise<UploadResult> {
+    return this.transport.request({
+      method: 'PUT',
+      path: (await this.links()).uploadMediaById(this.repoId, mediaItemId).href,
       body: { kind: 'binary', value: body, contentType },
       parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? '' }),
     });

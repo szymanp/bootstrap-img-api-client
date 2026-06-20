@@ -39,4 +39,8 @@ describe('MediaRef', () => {
     expect(MediaRef.file({ path: '/albums/vacation' }, 'a.JPG').toPathSuffix()).toBe('path;albums;vacation/a.JPG');
     expect(MediaRef.file(FolderRef.id('fid'), 'a b.JPG').toPathSuffix()).toBe('id;fid/a%20b.JPG');
   });
+
+  it('renders sha256 suffix', () => {
+    expect(MediaRef.sha256('abc123').toPathSuffix()).toBe('sha256;abc123');
+  });
 });

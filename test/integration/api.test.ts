@@ -61,7 +61,7 @@ run('integration (live server)', () => {
       const media = client.media(repoId);
       const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]); // minimal jpeg-ish bytes
       const upload = await media
-        .upload(FolderRef.id(albumId), 'tiny.jpg', bytes, 'image/jpeg')
+        .uploadToFolder(FolderRef.id(albumId), 'tiny.jpg', bytes, 'image/jpeg')
         .catch((e: ApiError) => e);
       // Some servers reject non-decodable images with 415/422; accept either a
       // successful upload or an explicit unsupported-media error.
@@ -118,7 +118,7 @@ run('integration (live server)', () => {
 
       // Try to seed a media item we can reference by path.
       const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]); // minimal jpeg-ish bytes
-      const upload = await media.upload(tripRef, 'cover.jpg', bytes, 'image/jpeg').catch((e: ApiError) => e);
+      const upload = await media.uploadToFolder(tripRef, 'cover.jpg', bytes, 'image/jpeg').catch((e: ApiError) => e);
       const uploaded = !(upload instanceof ApiError);
 
       // Store a body mixing a resolvable reference (when the upload took) with a

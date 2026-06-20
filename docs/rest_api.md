@@ -46,19 +46,19 @@ Error bodies are `application/problem+json`:
 
 The machine-readable `type` is the stable discriminator. Known values:
 
-| `type`                                                                                                          | Typical status  |
-| --------------------------------------------------------------------------------------------------------------- | --------------- |
-| `urn:bootstrap:error:bad-request` / `:validation-failed`                                                        | 400 / 422       |
-| `urn:bootstrap:error:unauthorized`                                                                              | 401             |
-| `urn:bootstrap:error:forbidden`                                                                                 | 403             |
-| `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409       |
-| `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired`               | 400 / 401 / 404 |
-| `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict`                                        | 404 / 409       |
-| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found`                                             | 404             |
-| `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists`                                       | 404 / 409       |
-| `urn:bootstrap:error:revision-conflict`                                                                         | 409             |
-| `urn:bootstrap:error:unsupported-media-type`                                                                    | 415             |
-| `urn:bootstrap:error:internal-error`                                                                            | 500             |
+| `type` | Typical status |
+| --- | --- |
+| `urn:bootstrap:error:bad-request` / `:validation-failed` | 400 / 422 |
+| `urn:bootstrap:error:unauthorized` | 401 |
+| `urn:bootstrap:error:forbidden` | 403 |
+| `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409 |
+| `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
+| `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
+| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` | 404 |
+| `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
+| `urn:bootstrap:error:revision-conflict` | 409 |
+| `urn:bootstrap:error:unsupported-media-type` | 415 |
+| `urn:bootstrap:error:internal-error` | 500 |
 
 ---
 
@@ -88,11 +88,78 @@ Each link is one of two kinds:
 {
   "links": {
     "repos:create": { "rel": "repos:create", "href": "/repos" },
-    "repos:query": { "rel": "repos:query", "href": "/repos;query" },
-    "repos:read": { "rel": "repos:read", "template": "/repos/{repoId}", "fields": ["repoId"] }
+    "repos:query":  { "rel": "repos:query", "href": "/repos;query" },
+    "repos:read":   { "rel": "repos:read", "template": "/repos/{repoId}", "fields": ["repoId"] }
   }
 }
 ```
+
+#### Link relations
+
+The complete set of `rel` keys advertised by the root, with the HTTP method and target endpoint each one points at. `href` links have no placeholders; `template` links carry `{placeholder}` segments listed under `fields`.
+
+##### Repositories
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `repos:create` | href | `POST /repos` |
+| `repos:query` | href | `POST /repos;query` |
+| `repos:read` | template | `GET /repos/{repoId}` |
+| `repos:update` | template | `POST /repos/{repoId}` |
+| `repos:delete` | template | `DELETE /repos/{repoId}` |
+
+##### Folders
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `folders:create` | template | `POST /folders/{repoId}` |
+| `folders:list-root` | template | `POST /folders/{repoId}/action;listroot` |
+| `folders:read` | template | `GET /folders/{repoId}/{folderIdOrPath}` |
+| `folders:update` | template | `POST /folders/{repoId}/{folderIdOrPath}` |
+| `folders:delete` | template | `DELETE /folders/{repoId}/{folderIdOrPath}` |
+| `folders:list` | template | `POST /folders/{repoId}/{folderIdOrPath}/action;list` |
+| `folders:tree` | template | `POST /folders/{repoId}/{folderIdOrPath}/action;tree` |
+| `folders:read-text` | template | `GET /folders/{repoId}/{folderIdOrPath}/text` |
+| `folders:update-text` | template | `PUT /folders/{repoId}/{folderIdOrPath}/text` |
+| `folders:list-permissions` | template | `GET /folders/{repoId}/{folderIdOrPath}/permissions` |
+| `folders:patch-permissions` | template | `PATCH /folders/{repoId}/{folderIdOrPath}/permissions` |
+| `folders:list-media` | template | `GET /folders/{repoId}/{folderIdOrPath}/media` |
+| `folders:query-media` | template | `POST /folders/{repoId}/{folderIdOrPath}/media;query` |
+| `folders:replace-media` | template | `PUT /folders/{repoId}/{folderIdOrPath}/media` |
+| `folders:patch-media` | template | `PATCH /folders/{repoId}/{folderIdOrPath}/media` |
+
+##### Media items
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `media:list` | template | `POST /media/{repoId}/action;list` |
+| `media:textrefs` | template | `GET /media/{repoId}/query;textrefs={folderIdOrPath}` |
+| `media:upload` | template | `PUT /media/{repoId}/{folderIdOrPath}/{filename}` |
+| `media:download` | template | `GET /media/{repoId}/{folderIdOrPath}/{filename}` |
+| `media:metadata` | template | `GET /media/{repoId}/{folderIdOrPath}/{filename}/metadata` |
+| `media:upload-by-id` | template | `PUT /media/{repoId}/mid;{mediaItemId}` |
+| `media:download-by-id` | template | `GET /media/{repoId}/mid;{mediaItemId}` |
+| `media:metadata-by-id` | template | `GET /media/{repoId}/mid;{mediaItemId}/metadata` |
+| `media:metadata-by-sha256` | template | `GET /media/{repoId}/sha256;{mediaItemHash}/metadata` |
+
+##### Users
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `users:create` | href | `POST /users` |
+| `users:resend-verification-token` | template | `POST /users/{userIdOrEmail}/action;resend-verification-token` |
+| `users:verify-user` | template | `POST /users/{userIdOrEmail}/action;verify-user` |
+
+##### Authentication
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `auth:send-token` | href | `POST /auth/action;send-token` |
+| `auth:login` | href | `POST /auth` |
+| `auth:logout` | href | `POST /auth/action;logout` |
+| `auth:session` | href | `GET /auth/session` |
+
+> The `media:upload-by-id`, `media:download-by-id`, and `media:metadata-by-id` templates expose the `mediaItemId` field as a bare placeholder (`/media/{repoId}/{mediaItemId}…`); substitute it with the `mid;<uuid>` matrix segment shown above.
 
 #### Responses
 
@@ -154,7 +221,7 @@ Returns details about the current session.
   "principal": "<uuid>",
   "email": "user@example.com",
   "createdAt": "2026-01-01T00:00:00Z",
-  "expiresAt": "2026-01-08T00:00:00Z"
+  "expiresAt":  "2026-01-08T00:00:00Z"
 }
 ```
 
@@ -318,10 +385,10 @@ Deletes a repository.
 
 Folders are addressed with a `{folderVar}` path segment:
 
-| Format         | Example                | Resolves to           |
-| -------------- | ---------------------- | --------------------- |
-| `id;<uuid>`    | `id;a1b2c3…`           | Folder with that UUID |
-| `path;el1;el2` | `path;albums;vacation` | `/albums/vacation`    |
+| Format | Example | Resolves to |
+| --- | --- | --- |
+| `id;<uuid>` | `id;a1b2c3…` | Folder with that UUID |
+| `path;el1;el2` | `path;albums;vacation` | `/albums/vacation` |
 
 In JSON bodies, folder references use:
 
@@ -584,11 +651,11 @@ Adds, removes, or modifies folder permissions.
 
 A **principal** is one of:
 
-| Form                                              | Meaning                     |
-| ------------------------------------------------- | --------------------------- |
+| Form | Meaning |
+| --- | --- |
 | `{ "type": "user", "email": "user@example.com" }` | A registered user, by email |
-| `{ "type": "anonymous" }`                         | Any unauthenticated caller  |
-| `{ "type": "link", "id": "<principal-uuid>" }`    | A shared-link principal     |
+| `{ "type": "anonymous" }` | Any unauthenticated caller |
+| `{ "type": "link", "id": "<principal-uuid>" }` | A shared-link principal |
 
 Valid `permission` values: `view`, `read`, `write`, `publish`, `share`.
 Valid `effect` values: `grant` (add the permission) or `default` (reset to the inherited default, i.e. remove the explicit grant).
@@ -644,14 +711,14 @@ Queries the folder's direct media-item membership — the set of media items lin
 #### Request body
 
 ```json5
-{
-  query: {
+{ 
+  "query": {
     /* Optional offset for paging. */
-    offset: 0,
+    "offset": 0,
     /* Optional limit for paging. */
-    limit: 20,
+    "limit": 20,
     /* Optional wildcard to filter filenames on. */
-    filename: '*.jpg',
+    "filename": "*.jpg",
     /**
       Specifies the ordering of the results.
       Possible values for "property":
@@ -661,11 +728,11 @@ Queries the folder's direct media-item membership — the set of media items lin
       - "ascending"
       - "descending"
     */
-    orderBy: {
-      property: 'filename',
-      order: 'ascending',
-    },
-  },
+    "orderBy": {
+      "property": "filename",
+      "order": "ascending"
+    }
+  }
 }
 ```
 
@@ -731,11 +798,11 @@ Applies an ordered list of patches to the folder's direct media-item membership 
 
 Each patch is one of:
 
-| Form                                                    | Effect                                                                            |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename.                                     |
-| `{ "op": "remove", "id": "<uuid>" }`                    | Unlink the media item with the given ID. No-op if not linked.                     |
-| `{ "op": "remove", "filename": "<name>" }`              | Unlink whichever media item is linked under that filename. No-op if no such link. |
+| Form | Effect |
+| --- | --- |
+| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename. |
+| `{ "op": "remove", "id": "<uuid>" }` | Unlink the media item with the given ID. No-op if not linked. |
+| `{ "op": "remove", "filename": "<name>" }` | Unlink whichever media item is linked under that filename. No-op if no such link. |
 
 #### Response body
 
@@ -823,6 +890,23 @@ Returns metadata and HAL-style links to all available variants for a media item.
 
 ---
 
+### PUT /media/{repoId}/mid;{mediaItemId}
+
+Uploads a media item. The body is the raw binary. `Content-Type` must be `image/*` or `video/*`.
+
+If a media item with the given ID already exists, but the raw binary does not correspond to the original BLOB for that existing media item, then 409 Conflict is returned.
+
+The user must be a repository owner or editor to perform this action.
+
+#### Responses
+
+- `204 No Content` - the media item was created successfully
+- `403 Forbidden` — insufficient permission
+- `409 Conflict` — media item already exists
+- `415 Unsupported Media Type`
+
+---
+
 ### GET /media/{repoId}/mid;{mediaItemId}
 
 Downloads the original binary by stable media item ID. Supports `?size=<variant>` and conditional GET.
@@ -834,6 +918,14 @@ Downloads the original binary by stable media item ID. Supports `?size=<variant>
 ### GET /media/{repoId}/mid;{mediaItemId}/metadata
 
 Returns metadata by stable media item ID.
+
+#### Responses — same as the folder+filename variant above
+
+---
+
+### GET /media/{repoId}/sha256;{mediaItemHash}/metadata
+
+Returns metadata of a media item by finding it using the SHA-256 hash of the associated blob(s).
 
 #### Responses — same as the folder+filename variant above
 

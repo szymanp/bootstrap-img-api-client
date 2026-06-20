@@ -184,6 +184,19 @@ export class ServiceLinks {
     return this.resolve('media:metadata-by-id', { repoId: encode(repoId), mediaItemId: midSegment(mediaItemId) });
   }
 
+  /** `media:metadata-by-sha256` — read media metadata by its blob's SHA-256 hash. */
+  mediaMetadataBySha256(repoId: string, mediaItemHash: string): HrefLink {
+    return this.resolve('media:metadata-by-sha256', {
+      repoId: encode(repoId),
+      mediaItemHash: sha256Segment(mediaItemHash),
+    });
+  }
+
+  /** `media:upload-by-id` — upload a media item by its stable id. */
+  uploadMediaById(repoId: string, mediaItemId: string): HrefLink {
+    return this.resolve('media:upload-by-id', { repoId: encode(repoId), mediaItemId: midSegment(mediaItemId) });
+  }
+
   /** `media:download` — download a media binary by folder + filename. */
   downloadMedia(repoId: string, folder: FolderRefInput, filename: string): HrefLink {
     return this.resolve('media:download', this.mediaFields(repoId, folder, filename));
@@ -255,4 +268,13 @@ function encode(value: string): string {
  */
 function midSegment(mediaItemId: string): string {
   return `mid;${encode(mediaItemId)}`;
+}
+
+/**
+ * The `sha256;<hash>` matrix segment used to address a media item by its blob's
+ * SHA-256 hash. Like the by-id templates, the advertised template uses a bare
+ * `{mediaItemHash}` placeholder and the API expects the `sha256;` prefix.
+ */
+function sha256Segment(mediaItemHash: string): string {
+  return `sha256;${encode(mediaItemHash)}`;
 }

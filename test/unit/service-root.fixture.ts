@@ -61,6 +61,16 @@ export const serviceRootFixture: ServiceRoot = {
       template: '/media/{repoId}/{mediaItemId}/metadata',
       fields: ['repoId', 'mediaItemId'],
     },
+    'media:metadata-by-sha256': {
+      rel: 'media:metadata-by-sha256',
+      template: '/media/{repoId}/{mediaItemHash}/metadata',
+      fields: ['repoId', 'mediaItemHash'],
+    },
+    'media:upload-by-id': {
+      rel: 'media:upload-by-id',
+      template: '/media/{repoId}/{mediaItemId}',
+      fields: ['repoId', 'mediaItemId'],
+    },
     'users:resend-verification-token': {
       rel: 'users:resend-verification-token',
       template: '/users/{userIdOrEmail}/action;resend-verification-token',

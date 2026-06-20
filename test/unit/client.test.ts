@@ -268,11 +268,37 @@ describe('media', () => {
     const client = makeClient(mock);
 
     const bytes = new Uint8Array([1, 2, 3]);
-    const result = await client.media('repo1').upload({ id: 'f1' }, 'a.JPG', bytes, 'image/jpeg');
+    const result = await client.media('repo1').uploadToFolder({ id: 'f1' }, 'a.JPG', bytes, 'image/jpeg');
     expect(mock.last.method).toBe('PUT');
     expect(mock.last.url).toBe('http://localhost:8080/media/repo1/id;f1/a.JPG');
     expect(mock.last.headers.get('content-type')).toBe('image/jpeg');
     expect(result.mediaItemId).toBe('m1');
+  });
+
+  it('uploads binary to a stable id and returns the Media-Item-Id', async () => {
+    const mock = new MockFetch().enqueue({ status: 204, headers: { 'media-item-id': 'm1' } });
+    const client = makeClient(mock);
+
+    const bytes = new Uint8Array([1, 2, 3]);
+    const result = await client.media('repo1').uploadById('m1', bytes, 'image/jpeg');
+    expect(mock.last.method).toBe('PUT');
+    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/mid;m1');
+    expect(mock.last.headers.get('content-type')).toBe('image/jpeg');
+    expect(result.mediaItemId).toBe('m1');
+  });
+
+  it('reads media metadata by its blob SHA-256 hash', async () => {
+    const { MediaRef } = await import('../../src/index');
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { revision: 'r1' }, data: { id: 'm1', type: 'image', visibility: 'private' }, links: {} },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.media('repo1').metadata(MediaRef.sha256('abc123'));
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/sha256;abc123/metadata');
+    expect(result.data.id).toBe('m1');
   });
 
   it('surfaces a 304 conditional GET as notModified', async () => {

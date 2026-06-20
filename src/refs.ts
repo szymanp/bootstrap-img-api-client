@@ -62,14 +62,19 @@ function splitPath(path: string): string[] {
   return path.split('/').filter((s) => s.length > 0);
 }
 
-/** How a {@link MediaRef} addresses its media item — by stable id or by location. */
+/**
+ * How a {@link MediaRef} addresses its media item — by stable id, by location,
+ * or by the SHA-256 hash of its blob (metadata lookup only).
+ */
 export type MediaAddressing =
   | { kind: 'id'; mediaItemId: string }
-  | { kind: 'file'; folder: FolderRefInput; filename: string };
+  | { kind: 'file'; folder: FolderRefInput; filename: string }
+  | { kind: 'sha256'; hash: string };
 
 /**
- * A reference to a media item: either by stable id (`mid;<uuid>`) or by the
- * folder + filename pair.
+ * A reference to a media item: by stable id (`mid;<uuid>`), by the folder +
+ * filename pair, or by the SHA-256 hash of its blob (`sha256;<hash>`). The
+ * hash form only addresses metadata; it cannot be uploaded or downloaded.
  */
 export class MediaRef {
   private constructor(private readonly addr: MediaAddressing) {}
@@ -84,6 +89,14 @@ export class MediaRef {
     return new MediaRef({ kind: 'file', folder, filename });
   }
 
+  /**
+   * Reference a media item by the SHA-256 hash of its blob. Only valid for
+   * metadata lookups (there is no download/upload by hash).
+   */
+  static sha256(hash: string): MediaRef {
+    return new MediaRef({ kind: 'sha256', hash });
+  }
+
   /** How this media item is addressed — used to pick the right link relation. */
   get addressing(): MediaAddressing {
     return this.addr;
@@ -93,6 +106,9 @@ export class MediaRef {
   toPathSuffix(): string {
     if (this.addr.kind === 'id') {
       return `mid;${encodeURIComponent(this.addr.mediaItemId)}`;
+    }
+    if (this.addr.kind === 'sha256') {
+      return `sha256;${encodeURIComponent(this.addr.hash)}`;
     }
     const folderVar = FolderRef.from(this.addr.folder).toPathSegment();
     return `${folderVar}/${encodeURIComponent(this.addr.filename)}`;

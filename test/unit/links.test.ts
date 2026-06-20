@@ -19,6 +19,16 @@ const links: LinkSet = {
     template: '/media/{repoId}/{mediaItemId}',
     fields: ['repoId', 'mediaItemId'],
   },
+  'media:upload-by-id': {
+    rel: 'media:upload-by-id',
+    template: '/media/{repoId}/{mediaItemId}',
+    fields: ['repoId', 'mediaItemId'],
+  },
+  'media:metadata-by-sha256': {
+    rel: 'media:metadata-by-sha256',
+    template: '/media/{repoId}/{mediaItemHash}/metadata',
+    fields: ['repoId', 'mediaItemHash'],
+  },
   'media:textrefs': {
     rel: 'media:textrefs',
     template: '/media/{repoId}/query;textrefs={folderIdOrPath}',
@@ -68,6 +78,17 @@ describe('ServiceLinks', () => {
     expect(sl.downloadMediaById('repo', 'm1')).toEqual({
       rel: 'media:download-by-id',
       href: '/media/repo/mid;m1',
+    });
+    expect(sl.uploadMediaById('repo', 'm1')).toEqual({
+      rel: 'media:upload-by-id',
+      href: '/media/repo/mid;m1',
+    });
+  });
+
+  it('prefixes the sha256; matrix segment for the by-hash metadata link', () => {
+    expect(sl.mediaMetadataBySha256('repo', 'abc123')).toEqual({
+      rel: 'media:metadata-by-sha256',
+      href: '/media/repo/sha256;abc123/metadata',
     });
   });
 

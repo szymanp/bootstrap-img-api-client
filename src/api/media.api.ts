@@ -46,7 +46,16 @@ export interface IMediaApi {
    * Upload a media item into a folder under `filename`. `contentType` must be an
    * `image/*` or `video/*` type. Returns the assigned media-item id.
    */
-  upload(folder: FolderRefInput, filename: string, body: BinaryBody, contentType: string): Promise<UploadResult>;
+  uploadToFolder(folder: FolderRefInput, filename: string, body: BinaryBody, contentType: string): Promise<UploadResult>;
+
+  /**
+   * Upload a media item under a known stable id. `contentType` must be an
+   * `image/*` or `video/*` type. The user must be a repository owner or editor.
+   * Throws an {@link ApiError} with status `409` if an item already exists at
+   * that id whose original blob differs from the uploaded binary. Returns the
+   * media-item id echoed by the server.
+   */
+  uploadById(mediaItemId: string, body: BinaryBody, contentType: string): Promise<UploadResult>;
 
   /**
    * Download a media binary. Returns `{ notModified: true }` when a conditional
