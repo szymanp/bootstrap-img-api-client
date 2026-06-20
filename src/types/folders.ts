@@ -12,7 +12,7 @@ export interface Folder {
   id: string;
   name?: string;
   path?: string;
-  type?: FolderType | string;
+  type?: FolderType;
   /** Single string in `standard`; all-languages object in `original`. */
   title?: Localized;
   /** Arbitrary typed content JSON; shape depends on `type`. */
@@ -32,7 +32,7 @@ export interface CreateFolderInput {
   parent: FolderReference;
   name: string;
   title: string;
-  type: FolderType | string;
+  type: FolderType;
   /** Optional typed content; defaults to `{}` when omitted. */
   data?: Record<string, unknown>;
 }
@@ -81,7 +81,6 @@ export interface MediaMembershipQuery {
 /** A patch op applied to a folder's direct media membership. */
 export type MediaMembershipPatch =
   | { op: 'add'; id: string; filename: string }
-  | { op: 'remove'; id: string }
   | { op: 'remove'; filename: string };
 
 /** Query for `action;tree`. */
