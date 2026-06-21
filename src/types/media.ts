@@ -8,6 +8,8 @@ export interface MediaMetadata {
   id: string;
   type: MediaType | string;
   visibility: MediaVisibility;
+  /** The hash of the original blob associated with this media item. */
+  originalHash: string;
   [key: string]: unknown;
 }
 

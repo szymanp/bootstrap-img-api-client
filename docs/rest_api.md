@@ -753,7 +753,7 @@ The response includes a list of media items directly associated with the folder 
     "mediaitem": [
       {
         "meta": { "revision": "…" },
-        "data": { "id": "…", "type": "image", "visibility": "private" },
+        "data": { "id": "…", "type": "image", "visibility": "private", "originalHash": "<sha256-hex>" },
         "links": { ... }
       },
       ...
@@ -870,12 +870,14 @@ Returns metadata and HAL-style links to all available variants for a media item.
 
 Each image-variant link carries the variant's `rel`, `href`, and rendered `width`/`height`. The primary variant link (`image:variant:primary`) additionally carries a `hash` field — the lowercase hex SHA-256 of the primary blob's file. The `hash` field is present only on the primary variant; scaled variants omit it.
 
+The `data` object's `originalHash` field is the lowercase hex SHA-256 of the item's **original** blob (the uploaded source). This is distinct from the primary variant link's `hash`, which is the hash of the rendered primary blob (the derivation master, which may differ from the original).
+
 #### Response body
 
 ```json
 {
   "meta": { "revision": "…" },
-  "data": { "id": "…", "type": "image", "visibility": "private" },
+  "data": { "id": "…", "type": "image", "visibility": "private", "originalHash": "<sha256-hex>" },
   "links": {
     "self": { "rel": "self", "href": "…/metadata" },
     "image:variant:primary": {
@@ -979,7 +981,8 @@ All fields except `folder` are optional.
       "data": {
           "id": "fe181a56-2e8a-4690-98d4-864a5b87645e",
           "type": "image",
-          "visibility": "normal"
+          "visibility": "normal",
+          "originalHash": "<sha256-hex>"
       },
       "links": {
           "image:variant:hd": {
