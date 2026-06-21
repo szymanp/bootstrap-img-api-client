@@ -35,6 +35,8 @@ export interface TemplateLink {
 export interface MediaItemVariantLink extends HrefLink {
   height: number;
   width: number;
+  /** The SHA-256 hash of the target resource. */
+  hash?: string;
 }
 
 export type Link = HrefLink | TemplateLink | MediaItemVariantLink;

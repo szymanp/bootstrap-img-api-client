@@ -1,6 +1,6 @@
 {
   "name": "@szymanp/api-client",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Isomorphic TypeScript REST client for the bootstrap-img API (fetch-based; works in Node CLIs and Angular web apps).",
   "type": "module",
   "license": "MIT",

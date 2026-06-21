@@ -772,7 +772,7 @@ The response includes a list of media items directly associated with the folder 
 
 ### PUT /folders/{repoId}/{folderVar}/media
 
-Replaces the folder's direct media-item membership with exactly the supplied list. All existing direct links are removed and the new ones are added atomically (inside a single transaction). Duplicate filenames or duplicate media-item IDs within the list are rejected with 409.
+Replaces the folder's direct media-item membership with exactly the supplied list. All existing direct links are removed and the new ones are added atomically (inside a single transaction). A media item may appear under several different filenames; duplicate filenames within the list are rejected with 409.
 
 #### Response body
 
@@ -788,7 +788,7 @@ Replaces the folder's direct media-item membership with exactly the supplied lis
 - `204 No Content`
 - `403 Forbidden` — caller lacks write permission on the folder
 - `404 Not Found`
-- `409 Conflict` — duplicate filename or media item in the list
+- `409 Conflict` — duplicate filename in the list
 
 ---
 
@@ -800,8 +800,7 @@ Each patch is one of:
 
 | Form | Effect |
 | --- | --- |
-| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename. |
-| `{ "op": "remove", "id": "<uuid>" }` | Unlink the media item with the given ID. No-op if not linked. |
+| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename. The same media item may be linked under several different filenames. |
 | `{ "op": "remove", "filename": "<name>" }` | Unlink whichever media item is linked under that filename. No-op if no such link. |
 
 #### Response body
@@ -809,7 +808,6 @@ Each patch is one of:
 ```json
 [
   { "op": "add", "id": "<media-item-uuid>", "filename": "third.JPG" },
-  { "op": "remove", "id": "<media-item-uuid>" },
   { "op": "remove", "filename": "second.JPG" }
 ]
 ```
@@ -820,7 +818,7 @@ Each patch is one of:
 - `400 Bad Request` — invalid patch op or malformed `remove`
 - `403 Forbidden` — caller lacks write permission on the folder
 - `404 Not Found`
-- `409 Conflict` — an `add` would create a duplicate filename or duplicate media item
+- `409 Conflict` — an `add` would create a duplicate filename
 
 ---
 
@@ -870,6 +868,8 @@ Downloads the original binary. Supports conditional GET via `If-None-Match` / ET
 
 Returns metadata and HAL-style links to all available variants for a media item.
 
+Each image-variant link carries the variant's `rel`, `href`, and rendered `width`/`height`. The primary variant link (`image:variant:primary`) additionally carries a `hash` field — the lowercase hex SHA-256 of the primary blob's file. The `hash` field is present only on the primary variant; scaled variants omit it.
+
 #### Response body
 
 ```json
@@ -877,8 +877,20 @@ Returns metadata and HAL-style links to all available variants for a media item.
   "meta": { "revision": "…" },
   "data": { "id": "…", "type": "image", "visibility": "private" },
   "links": {
-    "self": "…",
-    "variants": { "thumbnail": "…", "medium": "…" }
+    "self": { "rel": "self", "href": "…/metadata" },
+    "image:variant:primary": {
+      "rel": "image:variant:primary",
+      "href": "…",
+      "width": 1920,
+      "height": 1080,
+      "hash": "<sha256-hex>"
+    },
+    "image:variant:thumbnail": {
+      "rel": "image:variant:thumbnail",
+      "href": "…?size=thumbnail",
+      "width": 320,
+      "height": 240
+    }
   }
 }
 ```
