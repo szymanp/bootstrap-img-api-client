@@ -54,7 +54,7 @@ The machine-readable `type` is the stable discriminator. Known values:
 | `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409 |
 | `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
 | `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
-| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` | 404 |
+| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` / `:folder-already-exists` | 404 / 409 |
 | `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
 | `urn:bootstrap:error:revision-conflict` | 409 |
 | `urn:bootstrap:error:unsupported-media-type` | 415 |
@@ -173,7 +173,7 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 
 Issues a one-time login token for the given email. Always returns 204 to avoid user enumeration. Test users receive the token in the response body.
 
-#### Response body
+#### Request body
 
 ```json
 { "email": "user@example.com" }
@@ -238,7 +238,7 @@ Returns details about the current session.
 
 Registers a new user and sends a verification email. Always returns 204 to avoid enumeration.
 
-#### Response body
+#### Request body
 
 ```json
 { "email": "user@example.com" }
@@ -264,7 +264,7 @@ Resends the verification email. `userIdOrEmail` is a UUID or an email address.
 
 Confirms email ownership using the token from the verification email, activating the account.
 
-#### Response body
+#### Request body
 
 ```json
 { "token": "<token-from-email>" }
@@ -284,7 +284,7 @@ Repository responses include a `meta.revision` field used for optimistic concurr
 
 Creates a repository. `Content-Language` header is required; the title is stored under that locale.
 
-#### Response body
+#### Request body
 
 ```json
 {
@@ -307,7 +307,7 @@ Creates a repository. `Content-Language` header is required; the title is stored
 
 Returns a paginated list of repositories the caller has a role on.
 
-#### Response body
+#### Request body
 
 ```json
 { "query": { "offset": 0, "limit": 20 } }
@@ -346,7 +346,7 @@ The `representation` parameter selects how the repository is rendered:
 
 Updates a repository. All data fields are optional (partial update). `meta.revision` is required.
 
-#### Response body
+#### Request body
 
 ```json
 {
@@ -357,7 +357,7 @@ Updates a repository. All data fields are optional (partial update). `meta.revis
 
 #### Responses
 
-- `200 OK` — updated repository resource
+- `200 OK` — returns an updated repository resource
 - `404 Not Found`
 - `409 Conflict` — revision mismatch or name already taken
 
@@ -367,7 +367,7 @@ Updates a repository. All data fields are optional (partial update). `meta.revis
 
 Deletes a repository.
 
-#### Response body
+#### Request body
 
 ```json
 { "revision": "<current-revision>" }
@@ -413,11 +413,12 @@ Folder `links` includes a `text` link pointing at the text subresource. When any
 
 Creates a folder under an existing parent. `Content-Language` is required.
 
-#### Response body
+#### Request body
 
 ```json
 {
   "data": {
+    "id": "a1b2c3d4-…",
     "parent": { "path": "/albums" },
     "name": "vacation",
     "title": "Summer Vacation",
@@ -429,12 +430,15 @@ Creates a folder under an existing parent. `Content-Language` is required.
 
 Valid folder types: `root`, `albums`, `album`, `document`, `tag`, `media`, `media-source`, `picture`.
 
-`data` is optional. When omitted, an empty default content object (`{}`) is stored. The content shape is determined by `type`; unknown fields are preserved.
+The inner `data` object is optional. When omitted, an empty default content object (`{}`) is stored. The content shape is determined by `type`; unknown fields are preserved.
+
+The `data.id` property (a UUID sibling of `parent`/`name`/`title`/`type`, not part of the inner `data` content object) is optional and specifies the ID of the newly created folder. If omitted, an ID is assigned automatically by the server. If a folder with that ID already exists, the request fails with `409 Conflict` (`urn:bootstrap:error:folder-already-exists`).
 
 #### Responses
 
 - `200 OK` — folder resource with ancestors
 - `404 Not Found` — parent folder not found
+- `409 Conflict` - if a folder ID specified, but a folder with this ID already exists
 - `422 Unprocessable Entity` — invalid parent reference
 
 ---
@@ -464,7 +468,7 @@ The `representation` parameter selects how the folder is rendered:
 
 Updates a folder (rename, move, change title, or replace typed content). `meta.revision` is required.
 
-#### Response body
+#### Request body
 
 ```json
 {
@@ -498,7 +502,7 @@ All fields under `data` are optional:
 
 Deletes a folder and all its descendants.
 
-#### Response body
+#### Request body
 
 ```json
 { "revision": "<current-revision>" }
@@ -516,7 +520,7 @@ Deletes a folder and all its descendants.
 
 Lists root-level folders in the repository.
 
-#### Response body (optional)
+#### Request body (optional)
 
 ```json
 { "query": { "offset": 0, "limit": 20 } }
@@ -532,7 +536,7 @@ Lists root-level folders in the repository.
 
 Lists direct children of a folder.
 
-#### Response body (optional)
+#### Request body (optional)
 
 ```json
 { "query": { "offset": 0, "limit": 20 } }
@@ -549,7 +553,7 @@ Lists direct children of a folder.
 
 Returns a recursive subtree of subfolders.
 
-#### Response body (optional)
+#### Request body (optional)
 
 ```json
 { "query": { "depth": 3 } }
@@ -584,6 +588,10 @@ Returns the folder's full markdown body. The translation is selected from the fo
 Stores the request body as the folder's text content under the request's `Content-Language`. Other languages already present on the folder are preserved. Uses optimistic concurrency: the supplied revision must match the folder's current revision.
 
 The markdown body is scanned for references to other folders and media items (`mid:`/`img:`/`folderid:`/`folder:`). Resolved references are persisted (keyed by repository, folder, and language; the previous set for that language is cleared and replaced); references that do not resolve to an existing folder/media item are ignored but reported in the response. See [folder_text.md](folder_text.md) for the reference forms and resolution rules.
+
+#### Request body
+
+The markdown text.
 
 #### Request headers
 
@@ -660,7 +668,7 @@ A **principal** is one of:
 Valid `permission` values: `view`, `read`, `write`, `publish`, `share`.
 Valid `effect` values: `grant` (add the permission) or `default` (reset to the inherited default, i.e. remove the explicit grant).
 
-#### Response body
+#### Request body
 
 ```json
 {
@@ -774,7 +782,7 @@ The response includes a list of media items directly associated with the folder 
 
 Replaces the folder's direct media-item membership with exactly the supplied list. All existing direct links are removed and the new ones are added atomically (inside a single transaction). A media item may appear under several different filenames; duplicate filenames within the list are rejected with 409.
 
-#### Response body
+#### Request body
 
 ```json
 [
@@ -803,7 +811,7 @@ Each patch is one of:
 | `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename. The same media item may be linked under several different filenames. |
 | `{ "op": "remove", "filename": "<name>" }` | Unlink whichever media item is linked under that filename. No-op if no such link. |
 
-#### Response body
+#### Request body
 
 ```json
 [
@@ -911,6 +919,10 @@ Uploads a media item. The body is the raw binary. `Content-Type` must be `image/
 If a media item with the given ID already exists, but the raw binary does not correspond to the original BLOB for that existing media item, then 409 Conflict is returned.
 
 The user must be a repository owner or editor to perform this action.
+
+#### Request body
+
+The raw binary data of the media item.
 
 #### Responses
 

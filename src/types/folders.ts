@@ -29,6 +29,12 @@ export interface FolderRelated {
 
 /** Body for `POST /folders/{repoId}` (create). */
 export interface CreateFolderInput {
+  /**
+   * The ID of the folder to be created.
+   * 
+   * If not specified, an ID will be assigned by the server.
+   */
+  id?: string;
   parent: FolderReference;
   name: string;
   title: string;
