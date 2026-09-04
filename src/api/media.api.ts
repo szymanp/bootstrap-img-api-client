@@ -1,6 +1,6 @@
 import type { FolderRefInput, MediaRef } from '../refs';
 import type { MediaItemVariantName } from '../types/common';
-import type { Collection, MediaItemVariantLink, Resource } from '../types/envelope';
+import type { Collection, HlsRenditionLink, MediaItemVariantLink, Resource } from '../types/envelope';
 import type {
   BinaryBody,
   DownloadResult,
@@ -40,13 +40,24 @@ export interface MediaItemVariant extends MediaItemVariantLink {
   type: MediaType;
 }
 
+/** One HLS rendition (variant playlist) of a video media item, e.g. "hd". */
+export interface HlsRendition extends HlsRenditionLink {
+  /** The name of this rendition. E.g. "hd" or "sd". */
+  name: MediaItemVariantName;
+}
+
 /** Media-item endpoints, scoped to a single repository. */
 export interface IMediaApi {
   /**
    * Upload a media item into a folder under `filename`. `contentType` must be an
    * `image/*` or `video/*` type. Returns the assigned media-item id.
    */
-  uploadToFolder(folder: FolderRefInput, filename: string, body: BinaryBody, contentType: string): Promise<UploadResult>;
+  uploadToFolder(
+    folder: FolderRefInput,
+    filename: string,
+    body: BinaryBody,
+    contentType: string,
+  ): Promise<UploadResult>;
 
   /**
    * Upload a media item under a known stable id. `contentType` must be an
@@ -66,8 +77,24 @@ export interface IMediaApi {
   /** Read a media item's metadata and variant links. */
   metadata(ref: MediaRef): Promise<MediaResource>;
 
-  /** Reads a list of media item variants for this media resource. */
+  /**
+   * Reads a list of media item variants for this media resource: `image:variant:*`
+   * for an image item, `video:poster:variant:*` for a video item's poster frame.
+   */
   getVariants(resource: MediaResource): MediaItemVariant[];
+
+  /** Reads a video media item's HLS renditions (`video:hls:variant:*`), e.g. for a quality picker. */
+  getHlsRenditions(resource: MediaResource): HlsRendition[];
+
+  /**
+   * Download a video item's poster frame (a WebP image). Same `?size=`/conditional-GET
+   * semantics as {@link download}, since the poster is an image regardless of the
+   * parent item's media type.
+   */
+  downloadPoster(ref: MediaRef, options?: DownloadOptions): Promise<DownloadResult>;
+
+  /** Download a video item's HLS master playlist (`.m3u8` text). */
+  hlsMaster(ref: MediaRef): Promise<string>;
 
   /** List media items in a folder. */
   list(query: MediaListQuery, options?: { acceptLanguage?: string }): Promise<Collection<MediaResource>>;

@@ -39,6 +39,11 @@ export interface MediaItemVariantLink extends HrefLink {
   hash?: string;
 }
 
+/** A link to one HLS rendition (variant playlist) of a video media item. */
+export interface HlsRenditionLink extends MediaItemVariantLink {
+  bitrateKbps: number;
+}
+
 export type Link = HrefLink | TemplateLink | MediaItemVariantLink;
 
 /** Map of `rel` -> link, as returned by the service root and resource `links`. */
@@ -61,6 +66,11 @@ export function isMediaItemVariantLink(link: Link): link is MediaItemVariantLink
     typeof (link as MediaItemVariantLink).width === 'number' &&
     typeof (link as MediaItemVariantLink).height === 'number'
   );
+}
+
+/** Returns true when a link is an HLS rendition (variant playlist) link. */
+export function isHlsRenditionLink(link: Link): link is HlsRenditionLink {
+  return isMediaItemVariantLink(link) && typeof (link as HlsRenditionLink).bitrateKbps === 'number';
 }
 
 /** Single-resource envelope. `T` is the payload, `R` the shape of `related`. */

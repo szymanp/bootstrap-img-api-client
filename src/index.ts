@@ -16,7 +16,15 @@ export type {
   PutTextResult,
   UnresolvedReference,
 } from './api/folders.api';
-export type { IMediaApi, DownloadOptions, MediaResource, TextRefsOptions, TextRefsResult } from './api/media.api';
+export type {
+  IMediaApi,
+  DownloadOptions,
+  HlsRendition,
+  MediaItemVariant,
+  MediaResource,
+  TextRefsOptions,
+  TextRefsResult,
+} from './api/media.api';
 export type { IServiceRootApi, ServiceRoot } from './api/service-root.api';
 export { ServiceLinks } from './links';
 

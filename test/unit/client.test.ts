@@ -331,7 +331,7 @@ describe('media', () => {
     }
   });
 
-  it('extracts image and video variants from a resource, ignoring non-variant links', async () => {
+  it('extracts image and video-poster variants from a resource, ignoring non-variant links', async () => {
     const client = makeClient(new MockFetch());
 
     const resource = {
@@ -345,11 +345,23 @@ describe('media', () => {
           width: 1280,
           height: 720,
         },
-        'video:variant:preview': {
-          rel: 'video:variant:preview',
-          href: 'http://localhost:8080/media/repo1/id;m1?size=preview',
-          width: 640,
-          height: 360,
+        'video:poster:variant:hd': {
+          rel: 'video:poster:variant:hd',
+          href: 'http://localhost:8080/media/repo1/id;m1/poster?size=hd',
+          width: 1280,
+          height: 720,
+        },
+        'video:poster': { rel: 'video:poster', href: 'http://localhost:8080/media/repo1/id;m1/poster' },
+        'video:hls:master': {
+          rel: 'video:hls:master',
+          href: 'http://localhost:8080/media/repo1/id;m1/hls/master.m3u8',
+        },
+        'video:hls:variant:hd': {
+          rel: 'video:hls:variant:hd',
+          href: 'http://localhost:8080/media/repo1/id;m1/hls/hd/playlist.m3u8',
+          width: 1280,
+          height: 720,
+          bitrateKbps: 2500,
         },
       },
     };
@@ -366,12 +378,48 @@ describe('media', () => {
         name: 'hd',
       },
       {
-        rel: 'video:variant:preview',
-        href: 'http://localhost:8080/media/repo1/id;m1?size=preview',
-        width: 640,
-        height: 360,
+        rel: 'video:poster:variant:hd',
+        href: 'http://localhost:8080/media/repo1/id;m1/poster?size=hd',
+        width: 1280,
+        height: 720,
         type: 'video',
-        name: 'preview',
+        name: 'hd',
+      },
+    ]);
+  });
+
+  it('extracts HLS renditions from a resource, ignoring the master playlist and poster links', async () => {
+    const client = makeClient(new MockFetch());
+
+    const resource = {
+      meta: {},
+      data: { id: 'm1' },
+      links: {
+        'video:poster': { rel: 'video:poster', href: 'http://localhost:8080/media/repo1/id;m1/poster' },
+        'video:hls:master': {
+          rel: 'video:hls:master',
+          href: 'http://localhost:8080/media/repo1/id;m1/hls/master.m3u8',
+        },
+        'video:hls:variant:hd': {
+          rel: 'video:hls:variant:hd',
+          href: 'http://localhost:8080/media/repo1/id;m1/hls/hd/playlist.m3u8',
+          width: 1280,
+          height: 720,
+          bitrateKbps: 2500,
+        },
+      },
+    };
+
+    const renditions = client.media('repo1').getHlsRenditions(resource as never);
+
+    expect(renditions).toEqual([
+      {
+        rel: 'video:hls:variant:hd',
+        href: 'http://localhost:8080/media/repo1/id;m1/hls/hd/playlist.m3u8',
+        width: 1280,
+        height: 720,
+        bitrateKbps: 2500,
+        name: 'hd',
       },
     ]);
   });
@@ -379,6 +427,44 @@ describe('media', () => {
   it('returns an empty list when a resource has no links', async () => {
     const client = makeClient(new MockFetch());
     expect(client.media('repo1').getVariants({ meta: {}, data: { id: 'm1' } } as never)).toEqual([]);
+    expect(client.media('repo1').getHlsRenditions({ meta: {}, data: { id: 'm1' } } as never)).toEqual([]);
+  });
+
+  it('downloads a poster frame by folder+filename and by id, with ?size= and conditional GET', async () => {
+    const { MediaRef } = await import('../../src/index');
+    const mock = new MockFetch().enqueue(
+      { status: 200, headers: { 'content-type': 'image/webp' }, body: new Uint8Array([1, 2, 3]) },
+      { status: 304, headers: { etag: '"abc"' } },
+    );
+    const client = makeClient(mock);
+
+    await client.media('repo1').downloadPoster(MediaRef.file({ path: 'albums/trip' }, 'a.mp4'), { size: 'hd' });
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/path;albums;trip/a.mp4/poster?size=hd');
+
+    const result = await client.media('repo1').downloadPoster(MediaRef.id('m1'), { ifNoneMatch: '"abc"' });
+    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/mid;m1/poster');
+    expect(mock.last.headers.get('if-none-match')).toBe('"abc"');
+    expect(result.notModified).toBe(true);
+  });
+
+  it('downloads the HLS master playlist by folder+filename and by id', async () => {
+    const { MediaRef } = await import('../../src/index');
+    const playlist = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2500000\nhd/playlist.m3u8\n';
+    const mock = new MockFetch().enqueue(
+      { status: 200, headers: { 'content-type': 'application/vnd.apple.mpegurl' }, body: playlist },
+      { status: 200, headers: { 'content-type': 'application/vnd.apple.mpegurl' }, body: playlist },
+    );
+    const client = makeClient(mock);
+
+    const byFile = await client.media('repo1').hlsMaster(MediaRef.file({ path: 'albums/trip' }, 'a.mp4'));
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/path;albums;trip/a.mp4/hls/master.m3u8');
+    expect(byFile).toBe(playlist);
+
+    const byId = await client.media('repo1').hlsMaster(MediaRef.id('m1'));
+    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/mid;m1/hls/master.m3u8');
+    expect(byId).toBe(playlist);
   });
 
   it('surfaces a 304 textrefs conditional GET as notModified', async () => {

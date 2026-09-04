@@ -134,6 +134,26 @@ export const serviceRootFixture: ServiceRoot = {
       template: '/media/{repoId}/{folderIdOrPath}/{filename}',
       fields: ['repoId', 'folderIdOrPath', 'filename'],
     },
+    'media:poster': {
+      rel: 'media:poster',
+      template: '/media/{repoId}/{folderIdOrPath}/{filename}/poster',
+      fields: ['repoId', 'folderIdOrPath', 'filename'],
+    },
+    'media:poster-by-id': {
+      rel: 'media:poster-by-id',
+      template: '/media/{repoId}/{mediaItemId}/poster',
+      fields: ['repoId', 'mediaItemId'],
+    },
+    'media:hls-master': {
+      rel: 'media:hls-master',
+      template: '/media/{repoId}/{folderIdOrPath}/{filename}/hls/master.m3u8',
+      fields: ['repoId', 'folderIdOrPath', 'filename'],
+    },
+    'media:hls-master-by-id': {
+      rel: 'media:hls-master-by-id',
+      template: '/media/{repoId}/{mediaItemId}/hls/master.m3u8',
+      fields: ['repoId', 'mediaItemId'],
+    },
     'folders:list': {
       rel: 'folders:list',
       template: '/folders/{repoId}/{folderIdOrPath}/action;list',

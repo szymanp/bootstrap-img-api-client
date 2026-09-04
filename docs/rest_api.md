@@ -141,6 +141,14 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `media:download-by-id` | template | `GET /media/{repoId}/mid;{mediaItemId}` |
 | `media:metadata-by-id` | template | `GET /media/{repoId}/mid;{mediaItemId}/metadata` |
 | `media:metadata-by-sha256` | template | `GET /media/{repoId}/sha256;{mediaItemHash}/metadata` |
+| `media:poster` | template | `GET /media/{repoId}/{folderIdOrPath}/{filename}/poster` |
+| `media:poster-by-id` | template | `GET /media/{repoId}/mid;{mediaItemId}/poster` |
+| `media:hls-master` | template | `GET /media/{repoId}/{folderIdOrPath}/{filename}/hls/master.m3u8` |
+| `media:hls-master-by-id` | template | `GET /media/{repoId}/mid;{mediaItemId}/hls/master.m3u8` |
+
+Variant-playlist and segment URLs are deliberately **not** advertised as root templates — clients discover them from
+the master playlist content and the `metadata` response's `video:hls:variant:*` links, the same way image `?size=`
+variant URLs are discovered today rather than built from a root template.
 
 ##### Users
 
@@ -843,6 +851,13 @@ Folder addressing uses the same `{folderVar}` format as the Folder API. To acces
 
 Items can also be addressed by stable ID using the `mid;<uuid>` prefix. To access the media item, the user must have "read" permission to any folder containing the media item, or a "view" or "read" permission to a published folder with that media item.
 
+A video item itself is served **exclusively** through the `.../hls/*` endpoints below — the `?size=` query parameter
+documented under the folder+filename `GET` (and its `mid;`-addressed twin) applies only to that item route, and only
+for images; on a video item it falls through to the (image-only) primary-variant lookup and fails, since video no
+longer exposes a direct-file variant scheme for the video stream itself (see `docs/video_transcoding_plan.md`). The
+`.../poster` sub-resource is the one exception: it's an image (the extracted frame) regardless of the parent item's
+media type, so it keeps `?size=` semantics identical to the main image `GET` — see the `.../poster` endpoint below.
+
 ### PUT /media/{repoId}/{folderVar}/{filename}
 
 Uploads a media item. The body is the raw binary. `Content-Type` must be `image/*` or `video/*`.
@@ -905,10 +920,111 @@ The `data` object's `originalHash` field is the lowercase hex SHA-256 of the ite
 }
 ```
 
+A media item exposes either the `image:variant:*` family (`data.type == "image"`) or the combined `video:hls:*` /
+`video:poster` / `video:poster:variant:*` family (`data.type == "video"`), never both. A video item no longer exposes
+any directly-downloadable per-resolution file for the video stream itself — every rendition is reached through a
+playlist — but the poster keeps per-resolution links exactly like an image does, since it *is* one:
+
+```json
+{
+  "meta": { "revision": "…" },
+  "data": { "id": "…", "type": "video", "visibility": "private", "originalHash": "<sha256-hex>" },
+  "links": {
+    "self": { "rel": "self", "href": "…/metadata" },
+    "video:hls:master": { "rel": "video:hls:master", "href": "…/hls/master.m3u8" },
+    "video:hls:variant:hd": {
+      "rel": "video:hls:variant:hd",
+      "href": "…/hls/hd/playlist.m3u8",
+      "width": 1280,
+      "height": 720,
+      "bitrateKbps": 2500
+    },
+    "video:poster": { "rel": "video:poster", "href": "…/poster" },
+    "video:poster:variant:hd": {
+      "rel": "video:poster:variant:hd",
+      "href": "…/poster?size=hd",
+      "width": 1280,
+      "height": 720
+    }
+  }
+}
+```
+
+`video:hls:master` has no `width`/`height` — a master playlist has no single resolution. `video:poster:variant:*`
+lists one entry per configured `images.sizes` name the poster is larger than, exactly like `image:variant:*` does for
+a photo — the link is advertised whether or not that size has been requested yet, and `GET`-ing its `href` is what
+lazily creates and caches the underlying scaled poster row. `POST /media/{repoId}/action;list` response records
+follow the same split.
+
 #### Responses
 
 - `200 OK`
 - `404 Not Found`
+
+---
+
+### GET /media/{repoId}/{folderVar}/{filename}/poster
+
+Downloads the WebP poster frame for a video media item — the extracted, resized thumbnail frame described in
+`docs/video_transcoding_plan.md` §7a. Unlike the main item route, this sub-resource keeps `?size=` semantics
+identical to the main image `GET`, since the poster is itself an image regardless of the parent item's media type.
+
+#### Query parameters
+
+- `size` (optional) — variant name (e.g. `hd`, `sm`) to download a scaled version instead. Omitted, the poster is
+  returned at its stored (largest-`images.sizes`-capped) dimensions; with `?size=` it returns that scaled variant,
+  generated on first request and cached like any image variant.
+
+#### Responses
+
+- `200 OK` — binary stream, `Content-Type: image/webp`
+- `403 Forbidden` — caller lacks read permission on the item's folder
+- `404 Not Found` — not a video item, transcoding hasn't produced a poster yet, or `size` isn't a configured
+  `images.sizes` name
+
+---
+
+### GET /media/{repoId}/{folderVar}/{filename}/hls/master.m3u8
+
+Downloads the HLS master playlist tying together every produced rendition.
+
+#### Responses
+
+- `200 OK` — `Content-Type: application/vnd.apple.mpegurl`
+- `403 Forbidden`
+- `404 Not Found` — not a video item, or transcoding hasn't completed yet
+
+---
+
+### GET /media/{repoId}/{folderVar}/{filename}/hls/{rendition}/playlist.m3u8
+
+Downloads one rendition's variant playlist (e.g. `rendition = hd`).
+
+#### Responses
+
+- `200 OK` — `Content-Type: application/vnd.apple.mpegurl`
+- `403 Forbidden`
+- `404 Not Found` — not a video item, or `rendition` isn't a produced size
+
+---
+
+### GET /media/{repoId}/{folderVar}/{filename}/hls/{rendition}/{segment}
+
+Downloads one `.ts` segment of a rendition (e.g. `segment = seg_00000.ts`). `segment` is validated against the strict
+`seg_%05d.ts` pattern ffmpeg itself produces, then checked against the rendition's actual segment inventory, before
+any S3 key is derived from it — see `docs/video_transcoding_plan.md` §12 for the full rationale.
+
+#### Responses
+
+- `200 OK` — `Content-Type: video/mp2t`
+- `403 Forbidden`
+- `404 Not Found` — not a video item, or `rendition` isn't a produced size
+- `400 Bad Request` — `segment` doesn't match one of the rendition's actual segment filenames
+
+---
+
+Each of the four endpoints above has a `mid;{mediaItemId}`-addressed twin, following the same pattern as every other
+by-id endpoint (e.g. `GET /media/{repoId}/mid;{mediaItemId}/hls/master.m3u8`).
 
 ---
 

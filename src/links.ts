@@ -212,6 +212,26 @@ export class ServiceLinks {
     return this.resolve('media:upload', this.mediaFields(repoId, folder, filename));
   }
 
+  /** `media:poster` — download a video item's poster frame by folder + filename. */
+  posterMedia(repoId: string, folder: FolderRefInput, filename: string): HrefLink {
+    return this.resolve('media:poster', this.mediaFields(repoId, folder, filename));
+  }
+
+  /** `media:poster-by-id` — download a video item's poster frame by its stable id. */
+  posterMediaById(repoId: string, mediaItemId: string): HrefLink {
+    return this.resolve('media:poster-by-id', { repoId: encode(repoId), mediaItemId: midSegment(mediaItemId) });
+  }
+
+  /** `media:hls-master` — download a video item's HLS master playlist by folder + filename. */
+  hlsMasterMedia(repoId: string, folder: FolderRefInput, filename: string): HrefLink {
+    return this.resolve('media:hls-master', this.mediaFields(repoId, folder, filename));
+  }
+
+  /** `media:hls-master-by-id` — download a video item's HLS master playlist by its stable id. */
+  hlsMasterMediaById(repoId: string, mediaItemId: string): HrefLink {
+    return this.resolve('media:hls-master-by-id', { repoId: encode(repoId), mediaItemId: midSegment(mediaItemId) });
+  }
+
   // --- internals ---
 
   private folderFields(repoId: string, folder: FolderRefInput): Record<string, string> {

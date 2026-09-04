@@ -1,10 +1,11 @@
-import { parseJson, Transport } from '../http/transport';
+import { parseJson, parseText, Transport } from '../http/transport';
 import type { LinksProvider, ServiceLinks } from '../links';
 import type { FolderRefInput, MediaRef } from '../refs';
-import { isMediaItemVariantLink, type Collection, type HrefLink } from '../types/envelope';
+import { isHlsRenditionLink, isMediaItemVariantLink, type Collection, type HrefLink } from '../types/envelope';
 import type { BinaryBody, DownloadResult, MediaListQuery, UploadResult } from '../types/media';
 import type {
   DownloadOptions,
+  HlsRendition,
   IMediaApi,
   MediaItemVariant,
   MediaResource,
@@ -43,6 +44,32 @@ export class MediaApi implements IMediaApi {
         return links.mediaMetadata(this.repoId, addr.folder, addr.filename);
       case 'sha256':
         return links.mediaMetadataBySha256(this.repoId, addr.hash);
+    }
+  }
+
+  /** Resolve the poster-frame link for a media ref, picking the by-id or by-file relation. */
+  private posterLink(links: ServiceLinks, ref: MediaRef): HrefLink {
+    const addr = ref.addressing;
+    switch (addr.kind) {
+      case 'id':
+        return links.posterMediaById(this.repoId, addr.mediaItemId);
+      case 'file':
+        return links.posterMedia(this.repoId, addr.folder, addr.filename);
+      case 'sha256':
+        throw new Error('A sha256 media reference can only be used for metadata lookups, not the poster frame.');
+    }
+  }
+
+  /** Resolve the HLS master-playlist link for a media ref, picking the by-id or by-file relation. */
+  private hlsMasterLink(links: ServiceLinks, ref: MediaRef): HrefLink {
+    const addr = ref.addressing;
+    switch (addr.kind) {
+      case 'id':
+        return links.hlsMasterMediaById(this.repoId, addr.mediaItemId);
+      case 'file':
+        return links.hlsMasterMedia(this.repoId, addr.folder, addr.filename);
+      case 'sha256':
+        throw new Error('A sha256 media reference can only be used for metadata lookups, not the HLS playlist.');
     }
   }
 
@@ -85,10 +112,23 @@ export class MediaApi implements IMediaApi {
    * GET matches (HTTP 304); otherwise the binary plus content type and ETag.
    */
   async download(ref: MediaRef, options: DownloadOptions = {}): Promise<DownloadResult> {
+    return this.fetchBinary(this.downloadLink(await this.links(), ref), options);
+  }
+
+  /**
+   * Download a video item's poster frame (a WebP image). Same `?size=`/conditional-GET
+   * semantics as {@link download}, since the poster is an image regardless of the
+   * parent item's media type.
+   */
+  async downloadPoster(ref: MediaRef, options: DownloadOptions = {}): Promise<DownloadResult> {
+    return this.fetchBinary(this.posterLink(await this.links(), ref), options);
+  }
+
+  private async fetchBinary(link: HrefLink, options: DownloadOptions): Promise<DownloadResult> {
     const ifNoneMatch = Array.isArray(options.ifNoneMatch) ? options.ifNoneMatch.join(', ') : options.ifNoneMatch;
     return this.transport.request({
       method: 'GET',
-      path: this.downloadLink(await this.links(), ref).href,
+      path: link.href,
       query: { size: options.size },
       acceptLanguage: null,
       headers: { accept: '*/*', 'if-none-match': ifNoneMatch },
@@ -105,6 +145,17 @@ export class MediaApi implements IMediaApi {
           etag,
         };
       },
+    });
+  }
+
+  /** Download a video item's HLS master playlist (`.m3u8` text). */
+  async hlsMaster(ref: MediaRef): Promise<string> {
+    return this.transport.request({
+      method: 'GET',
+      path: this.hlsMasterLink(await this.links(), ref).href,
+      acceptLanguage: null,
+      headers: { accept: 'application/vnd.apple.mpegurl' },
+      parse: parseText,
     });
   }
 
@@ -133,13 +184,24 @@ export class MediaApi implements IMediaApi {
           name: link.rel.substring(Rels.IMAGE_VARIANT_PREFIX.length),
         })),
       ...links
-        .filter((link) => link.rel.startsWith(Rels.VIDEO_VARIANT_PREFIX))
+        .filter((link) => link.rel.startsWith(Rels.VIDEO_POSTER_VARIANT_PREFIX))
         .map((link) => ({
           ...link,
           type: 'video' as const,
-          name: link.rel.substring(Rels.VIDEO_VARIANT_PREFIX.length),
+          name: link.rel.substring(Rels.VIDEO_POSTER_VARIANT_PREFIX.length),
         })),
     ];
+  }
+
+  getHlsRenditions(resource: MediaResource): HlsRendition[] {
+    if (!resource.links) {
+      return [];
+    }
+
+    return Object.values(resource.links)
+      .filter(isHlsRenditionLink)
+      .filter((link) => link.rel.startsWith(Rels.VIDEO_HLS_VARIANT_PREFIX))
+      .map((link) => ({ ...link, name: link.rel.substring(Rels.VIDEO_HLS_VARIANT_PREFIX.length) }));
   }
 
   /** List media items in a folder. */
@@ -180,5 +242,6 @@ export class MediaApi implements IMediaApi {
 
 const Rels = {
   IMAGE_VARIANT_PREFIX: 'image:variant:',
-  VIDEO_VARIANT_PREFIX: 'video:variant:',
+  VIDEO_POSTER_VARIANT_PREFIX: 'video:poster:variant:',
+  VIDEO_HLS_VARIANT_PREFIX: 'video:hls:variant:',
 };
