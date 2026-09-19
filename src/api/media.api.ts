@@ -1,5 +1,5 @@
 import type { FolderRefInput, MediaRef } from '../refs';
-import type { MediaItemVariantName } from '../types/common';
+import type { MediaItemVariantName, ReadOptions } from '../types/common';
 import type { Collection, HlsRenditionLink, MediaItemVariantLink, Resource } from '../types/envelope';
 import type {
   BinaryBody,
@@ -19,19 +19,6 @@ export interface DownloadOptions {
   /** `If-None-Match` value(s) for a conditional GET. */
   ifNoneMatch?: string | string[];
 }
-
-/** Options for {@link IMediaApi.textRefs}. */
-export interface TextRefsOptions {
-  /** Language version of the folder text to resolve references against. */
-  acceptLanguage?: string;
-  /** `If-None-Match` value(s) for a conditional GET (the ETag tracks the folder revision). */
-  ifNoneMatch?: string | string[];
-}
-
-/** A media-by-text-references listing (200) or a not-modified result (304). */
-export type TextRefsResult =
-  | { notModified: false; collection: Collection<MediaResource>; etag: string | null }
-  | { notModified: true; etag: string | null };
 
 export interface MediaItemVariant extends MediaItemVariantLink {
   /** The name of this variant. E.g. "primary" or "fhd". */
@@ -74,8 +61,13 @@ export interface IMediaApi {
    */
   download(ref: MediaRef, options?: DownloadOptions): Promise<DownloadResult>;
 
-  /** Read a media item's metadata and variant links. */
-  metadata(ref: MediaRef): Promise<MediaResource>;
+  /**
+   * Read a media item's metadata and variant links. `fields` selects among
+   * `type`, `visibility`, `originalHash`, and `metadata` (`id` is always
+   * included); defaults to every field except `metadata`, which requires an
+   * extra DB lookup and must be requested explicitly.
+   */
+  metadata(ref: MediaRef, options?: Pick<ReadOptions, 'fields'>): Promise<MediaResource>;
 
   /**
    * Reads a list of media item variants for this media resource: `image:variant:*`
@@ -98,12 +90,4 @@ export interface IMediaApi {
 
   /** List media items in a folder. */
   list(query: MediaListQuery, options?: { acceptLanguage?: string }): Promise<Collection<MediaResource>>;
-
-  /**
-   * List every media item referenced in the text body of `folder` (the
-   * resolved `mid:`/`img:` references). The language is selected from
-   * `acceptLanguage` (defaulting to the client's language). Supports a
-   * conditional GET via `ifNoneMatch`; an ETag match yields `notModified: true`.
-   */
-  textRefs(folder: FolderRefInput, options?: TextRefsOptions): Promise<TextRefsResult>;
 }

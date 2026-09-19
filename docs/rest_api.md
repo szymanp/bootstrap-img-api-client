@@ -121,6 +121,7 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `folders:tree` | template | `POST /folders/{repoId}/{folderIdOrPath}/action;tree` |
 | `folders:read-text` | template | `GET /folders/{repoId}/{folderIdOrPath}/text` |
 | `folders:update-text` | template | `PUT /folders/{repoId}/{folderIdOrPath}/text` |
+| `folders:text-media` | template | `GET /folders/{repoId}/{folderIdOrPath}/text/media` |
 | `folders:list-permissions` | template | `GET /folders/{repoId}/{folderIdOrPath}/permissions` |
 | `folders:patch-permissions` | template | `PATCH /folders/{repoId}/{folderIdOrPath}/permissions` |
 | `folders:list-media` | template | `GET /folders/{repoId}/{folderIdOrPath}/media` |
@@ -133,7 +134,6 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `rel` | Kind | Method & target |
 | --- | --- | --- |
 | `media:list` | template | `POST /media/{repoId}/action;list` |
-| `media:textrefs` | template | `GET /media/{repoId}/query;textrefs={folderIdOrPath}` |
 | `media:upload` | template | `PUT /media/{repoId}/{folderIdOrPath}/{filename}` |
 | `media:download` | template | `GET /media/{repoId}/{folderIdOrPath}/{filename}` |
 | `media:metadata` | template | `GET /media/{repoId}/{folderIdOrPath}/{filename}/metadata` |
@@ -350,6 +350,14 @@ The `representation` parameter selects how the repository is rendered:
 
 ---
 
+### GET /repos?org=organizationName&name=repositoryName
+
+Retrieves a repository by its name (`name`). The repository name can optionally qualified with an organization name (`org`).
+
+This request accepts the same additional query parameters as `GET /repos/{repoId}` and returns the same responses.
+
+---
+
 ### POST /repos/{repoId}
 
 Updates a repository. All data fields are optional (partial update). `meta.revision` is required.
@@ -409,7 +417,7 @@ Single-folder responses include `related.ancestors` — an ordered list of ances
 
 Folder `data` carries a `textPreview` field (first 250 characters of the localized markdown body) when text content exists for the resolved language. Use the dedicated text subresource below to read the full body or write a new translation.
 
-Folder `data` also carries a `data` field — an arbitrary JSON object holding the folder's typed content (kind-specific properties). The shape depends on the folder's `type`; for example an `album` folder may expose `{"title": "Cover Title"}`. Unknown fields in this object are preserved round-trip. The internal `kind` discriminator is omitted from responses since it is already conveyed by `type`.
+Folder `data` also carries a `data` field — an arbitrary JSON object holding the folder's typed content (kind-specific properties). The shape depends on the folder's `type`; for example an `album` folder may expose `{"title": "Cover Title"}`. Unknown fields in this object are preserved round-trip. The internal `kind` discriminator is omitted from responses since it is already conveyed by `type`. A reserved `text` key, present on any folder type, carries the folder's associated object data for markdown embeds (e.g. a `::gallery` directive's definition) — see [folder_text.md](folder_text.md#associated-object-data). It is always wholesale-replaced along with the rest of `data`, like every other part of this field.
 
 Folder `links` includes a `text` link pointing at the text subresource. When any text has been stored, the link advertises the available languages, e.g.
 
@@ -595,7 +603,7 @@ Returns the folder's full markdown body. The translation is selected from the fo
 
 Stores the request body as the folder's text content under the request's `Content-Language`. Other languages already present on the folder are preserved. Uses optimistic concurrency: the supplied revision must match the folder's current revision.
 
-The markdown body is scanned for references to other folders and media items (`mid:`/`img:`/`folderid:`/`folder:`). Resolved references are persisted (keyed by repository, folder, and language; the previous set for that language is cleared and replaced); references that do not resolve to an existing folder/media item are ignored but reported in the response. See [folder_text.md](folder_text.md) for the reference forms and resolution rules.
+The markdown body (GFM plus `::media`/`::gallery` embed directives) is scanned for references to other folders and media items (`media:`/`media-path:`/`folder:`/`folder-path:`). Every reference found is persisted — resolved, missing, or malformed alike (keyed by repository, folder, and language; the previous set for that language is cleared and replaced) — so it can be queried later via `GET …/text/media`; references that do not resolve to an existing folder/media item are still saved but reported in this response. See [folder_text.md](folder_text.md) for the reference forms, embed directives, and resolution rules.
 
 #### Request body
 
@@ -614,14 +622,14 @@ The markdown text.
   "meta": { "revision": "<new-revision>" },
   "validation": {
     "unresolvedReferences": [
-      { "type": "media", "reference": "img:./missing.jpg" },
-      { "type": "folder", "reference": "folder:../nope" }
+      { "type": "media", "reference": "media-path:./missing.jpg", "status": "missing", "addressKind": "by-path" },
+      { "type": "folder", "reference": "folder-path:../nope", "status": "missing", "addressKind": "by-path" }
     ]
   }
 }
 ```
 
-`unresolvedReferences` is empty when every reference resolved. Each entry's `type` is `media` (for `mid:`/`img:`) or `folder` (for `folderid:`/`folder:`), and `reference` is the original `scheme:target` text.
+`unresolvedReferences` is empty when every reference resolved. Each entry's `type` is `media` (for `media:`/`media-path:`) or `folder` (for `folder:`/`folder-path:`), `reference` is the original `scheme:target` text, `status` is `missing` (well-formed, no such target) or `malformed` (bad UUID, or a path escaping the repository root), and `addressKind` is `by-id` or `by-path`.
 
 #### Response headers
 
@@ -635,6 +643,59 @@ The markdown text.
 - `403 Forbidden` — caller lacks write permission
 - `404 Not Found`
 - `409 Conflict` — revision mismatch
+
+---
+
+### GET /folders/{repoId}/{folderVar}/text/media
+
+Returns every reference recorded from the folder's text body / associated object data, in the language negotiated
+from `Accept-Language`, re-resolved against current repository state (see [folder_text.md](folder_text.md)). A
+resolved by-id reference trusts its stored target directly; anything else (by-path, or a by-id reference that was
+missing/malformed when last saved) is re-resolved live, so a folder move, rename, or later-created target is
+reflected without re-saving the document.
+
+Requires `Accept-Language` to select the right language version of the text. Supports conditional `GET` via
+`If-None-Match`/`ETag`, where the `ETag` is correlated with the folder's revision.
+
+#### Response body
+
+```json
+{
+  "meta": { "revision": "UUID" },
+  "records": [
+    {
+      "url": "folder-path:../My album",
+      "sourceLocation": "text",
+      "targetKind": "folder",
+      "targetId": "e377a8e3-48d0-48ae-848a-58a52e8cf194",
+      "addressKind": "by-path",
+      "status": "resolved"
+    },
+    {
+      "url": "media:550e8400-e29b-41d4-a716-446655440000",
+      "sourceLocation": "text",
+      "targetKind": "media",
+      "targetId": "550e8400-e29b-41d4-a716-446655440000",
+      "addressKind": "by-id",
+      "status": "resolved"
+    }
+  ],
+  "related": {
+    "folders": [ /* folder resource for e377a8e3-48d0-48ae-848a-58a52e8cf194 */ ],
+    "mediaItems": [ /* media item resource for 550e8400-e29b-41d4-a716-446655440000 */ ]
+  }
+}
+```
+
+`status` reflects whether the target exists, independent of read permissions. A resolved target is included under
+`related` only when the caller can read it — its row still reports `status: "resolved"` in `records` either way.
+
+#### Responses
+
+- `200 OK`
+- `304 Not Modified` — `If-None-Match` matches the folder's current revision
+- `403 Forbidden` — caller lacks read permission on the folder
+- `404 Not Found`
 
 ---
 
@@ -701,7 +762,7 @@ Valid `effect` values: `grant` (add the permission) or `default` (reset to the i
 
 ### GET /folders/{repoId}/{folderVar}/media
 
-Lists the folder's direct media-item membership — the set of media items linked into the folder under their stored filenames. Media items reachable only via descendant folders are not included.
+Lists the folder's direct media-item membership — the set of media items linked into the folder under their stored filenames. Media items reachable only via descendant folders are not included. Results are returned in the folder's custom order (see `PATCH .../media`'s `move` op below) — a newly linked item is appended to the end of that order.
 
 #### Response body
 
@@ -736,16 +797,20 @@ Queries the folder's direct media-item membership — the set of media items lin
     /* Optional wildcard to filter filenames on. */
     "filename": "*.jpg",
     /**
-      Specifies the ordering of the results.
+      Specifies the ordering of the results. Defaults to `{"property": "custom", "order": "ascending"}` — the
+      folder's persisted custom order — when omitted.
       Possible values for "property":
       - "filename"
       - "creationTime"
+      - "captureTime" — the item's effective capture time, once metadata extraction has populated it (see
+        `docs/media_metadata.md`); items with no extracted capture time sort last regardless of "order"
+      - "custom" — the folder's persisted, user-arrangeable order (see `PATCH .../media`'s `move` op)
       Possible values for "order":
       - "ascending"
       - "descending"
     */
     "orderBy": {
-      "property": "filename",
+      "property": "custom",
       "order": "ascending"
     }
   }
@@ -788,7 +853,7 @@ The response includes a list of media items directly associated with the folder 
 
 ### PUT /folders/{repoId}/{folderVar}/media
 
-Replaces the folder's direct media-item membership with exactly the supplied list. All existing direct links are removed and the new ones are added atomically (inside a single transaction). A media item may appear under several different filenames; duplicate filenames within the list are rejected with 409.
+Replaces the folder's direct media-item membership with exactly the supplied list. All existing direct links are removed and the new ones are added atomically (inside a single transaction). A media item may appear under several different filenames; duplicate filenames within the list are rejected with 409. The supplied array's order becomes the folder's new custom order.
 
 #### Request body
 
@@ -816,31 +881,36 @@ Each patch is one of:
 
 | Form | Effect |
 | --- | --- |
-| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename. The same media item may be linked under several different filenames. |
+| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename, appended to the end of the folder's custom order. The same media item may be linked under several different filenames. |
 | `{ "op": "remove", "filename": "<name>" }` | Unlink whichever media item is linked under that filename. No-op if no such link. |
+| `{ "op": "move", "filename": "<name>", "afterFilename": "<name>" \| null }` | Repositions the link within the folder's custom order: moves it to immediately after whichever item is linked under `afterFilename`, or to the very front of the order when `afterFilename` is `null`/omitted. |
 
 #### Request body
 
 ```json
 [
   { "op": "add", "id": "<media-item-uuid>", "filename": "third.JPG" },
-  { "op": "remove", "filename": "second.JPG" }
+  { "op": "remove", "filename": "second.JPG" },
+  { "op": "move", "filename": "first.JPG", "afterFilename": "third.JPG" }
 ]
 ```
 
 #### Responses
 
-- `200 OK` — JSON array of the resulting membership (same shape as the GET response)
-- `400 Bad Request` — invalid patch op or malformed `remove`
+- `200 OK` — JSON array of the resulting membership (same shape as the GET response), in the folder's custom order
+- `400 Bad Request` — invalid patch op, malformed `remove`, or a `move` whose `afterFilename` equals `filename`
 - `403 Forbidden` — caller lacks write permission on the folder
-- `404 Not Found`
+- `404 Not Found` — the folder, or (for a `move`) `filename`/`afterFilename` does not resolve to a link in the folder
 - `409 Conflict` — an `add` would create a duplicate filename
 
 ---
 
 ## Media Items
 
-Media items are files (images or videos) stored in S3.
+Media items are files (images or videos) stored in S3. Supported image inputs include common camera raw formats
+(Canon CR2/CR3, Nikon NEF, Sony ARW, Adobe DNG, Panasonic RAW/RW2, Olympus ORF) alongside JPEG/PNG/WebP — raw files
+are decoded server-side into the normal `image:variant:*` family, so a raw upload looks identical to a JPEG upload
+from the API's point of view once processing completes; see `docs/raw_image_support_plan.md`.
 
 They can be accessed in two ways:
 
@@ -891,16 +961,51 @@ Downloads the original binary. Supports conditional GET via `If-None-Match` / ET
 
 Returns metadata and HAL-style links to all available variants for a media item.
 
+#### Query parameters
+
+- `fields` (optional) — comma-separated field selector. Selects among `type`, `visibility`, `originalHash`, and
+  `metadata` (`id` is always included). Defaults to every field **except** `metadata`: populating `metadata` requires
+  an extra DB lookup of the item's extracted facts (see `docs/media_metadata.md`), so it is opt-in via
+  `?fields=metadata` (or `?fields=type,visibility,originalHash,metadata` to get it alongside the defaults) rather than
+  returned unconditionally. This selector applies to every endpoint below that returns a media-item resource,
+  including the `action;list` collection endpoint and the folder `media;query` endpoint's `related.mediaitem`
+  entries (there, selected via the JSON body's `fields`, like `POST /repos;query`).
+
 Each image-variant link carries the variant's `rel`, `href`, and rendered `width`/`height`. The primary variant link (`image:variant:primary`) additionally carries a `hash` field — the lowercase hex SHA-256 of the primary blob's file. The `hash` field is present only on the primary variant; scaled variants omit it.
 
 The `data` object's `originalHash` field is the lowercase hex SHA-256 of the item's **original** blob (the uploaded source). This is distinct from the primary variant link's `hash`, which is the hash of the rendered primary blob (the derivation master, which may differ from the original).
+
+`data.metadata` carries the item's effective common properties extracted from embedded metadata (see
+`docs/media_metadata.md`): `captureTime` (the only property this API makes sortable), `dimensions`
+(`width`/`height`, taken from the orientation-corrected display size when known, plus the raw EXIF `orientation`
+code 1–8), `camera` (`make`/`model`/`lens`), `format` (`name`/`mimetype` as detected by the extractor), and, for
+video, `durationMs`. Each group is present only once at least one of its fields is known — a group with nothing
+extracted is omitted entirely, not returned with null values, and the field is absent entirely until metadata
+extraction has populated anything at all. A timezone-missing capture time stays visibly incomplete
+(`offset`/`instant` absent) rather than being masked by a fabricated UTC offset. GPS/location is not exposed here —
+the extraction pipeline does not currently parse it (see `docs/media_metadata.md`).
 
 #### Response body
 
 ```json
 {
   "meta": { "revision": "…" },
-  "data": { "id": "…", "type": "image", "visibility": "private", "originalHash": "<sha256-hex>" },
+  "data": {
+    "id": "…", "type": "image", "visibility": "private", "originalHash": "<sha256-hex>",
+    "metadata": {
+      "captureTime": {
+        "local": "2026-08-23T17:42:11.384",
+        "offset": "+02:00",
+        "instant": "2026-08-23T15:42:11.384Z",
+        "date": "2026-08-23",
+        "precision": "millisecond",
+        "quality": "embedded"
+      },
+      "dimensions": { "width": 6048, "height": 4024, "orientation": 1 },
+      "camera": { "make": "Nikon", "model": "Z 8", "lens": "NIKKOR Z 24-70mm f/2.8 S" },
+      "format": { "name": "JPEG", "mimetype": "image/jpeg" }
+    }
+  },
   "links": {
     "self": { "rel": "self", "href": "…/metadata" },
     "image:variant:primary": {
@@ -928,7 +1033,14 @@ playlist — but the poster keeps per-resolution links exactly like an image doe
 ```json
 {
   "meta": { "revision": "…" },
-  "data": { "id": "…", "type": "video", "visibility": "private", "originalHash": "<sha256-hex>" },
+  "data": {
+    "id": "…", "type": "video", "visibility": "private", "originalHash": "<sha256-hex>",
+    "metadata": {
+      "captureTime": { "local": "2026-08-23T17:42:11", "precision": "second", "quality": "timezone_missing" },
+      "dimensions": { "width": 1920, "height": 1080 },
+      "durationMs": 125500
+    }
+  },
   "links": {
     "self": { "rel": "self", "href": "…/metadata" },
     "video:hls:master": { "rel": "video:hls:master", "href": "…/hls/master.m3u8" },
@@ -1093,7 +1205,9 @@ Lists media items in a folder.
 }
 ```
 
-All fields except `folder` are optional.
+All fields except `folder` are optional. `orderBy.property` accepts `"creationTime"` (default) or `"captureTime"` —
+the item's effective capture time, once metadata extraction has populated it (see `docs/media_metadata.md`); items
+with no extracted capture time sort last regardless of `order`.
 
 #### Response body
 
@@ -1137,23 +1251,3 @@ All fields except `folder` are optional.
 - `403 Forbidden` — caller lacks read permission on the folder
 - `404 Not Found` — folder not found
 - `422 Unprocessable Entity` — folder path not found
-
----
-
-### GET /media/{repoId}/query;textrefs={folderVar}
-
-Lists all media items that are referenced in the text body of the given folder.
-
-The request requires an `Accept-Language` header to select the right language version of the text.
-It supports a conditional GET via `If-None-Match` / `ETag`, where the `Etag` is correlated with the revision ID of the folder.
-
-#### Response body
-
-Same as `POST /media/{repoId}/action;list`.
-
-#### Responses
-
-- `200 OK` — array of media records with metadata and variant links
-- `304 Not Modified` — ETag matches
-- `403 Forbidden` — caller lacks read permission on the folder
-- `404 Not Found` — folder not found

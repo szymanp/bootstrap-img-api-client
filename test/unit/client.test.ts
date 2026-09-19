@@ -152,6 +152,21 @@ describe('repositories', () => {
     expect(isApiError(err, ErrorType.RepositoryNameConflict)).toBe(true);
     expect(err.status).toBe(409);
   });
+
+  it('looks up a repository by name via the /repos collection path', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: {}, data: { id: 'id1', name: 'my-repo' } },
+    });
+    const client = makeClient(mock);
+
+    await client.repos.getByName('my-repo', { org: 'acme' });
+    const url = new URL(mock.last.url);
+    expect(mock.last.method).toBe('GET');
+    expect(url.pathname).toBe('/repos');
+    expect(url.searchParams.get('org')).toBe('acme');
+    expect(url.searchParams.get('name')).toBe('my-repo');
+  });
 });
 
 describe('folders', () => {
@@ -230,8 +245,8 @@ describe('folders', () => {
         meta: { revision: 'rev10' },
         validation: {
           unresolvedReferences: [
-            { type: 'media', reference: 'img:./missing.jpg' },
-            { type: 'folder', reference: 'folder:../nope' },
+            { type: 'media', reference: 'media-path:./missing.jpg', status: 'missing', addressKind: 'by-path' },
+            { type: 'folder', reference: 'folder-path:../nope', status: 'missing', addressKind: 'by-path' },
           ],
         },
       },
@@ -244,8 +259,8 @@ describe('folders', () => {
     expect(mock.last.headers.get('content-type')).toContain('text/markdown');
     expect(result.revision).toBe('rev10');
     expect(result.unresolvedReferences).toEqual([
-      { type: 'media', reference: 'img:./missing.jpg' },
-      { type: 'folder', reference: 'folder:../nope' },
+      { type: 'media', reference: 'media-path:./missing.jpg', status: 'missing', addressKind: 'by-path' },
+      { type: 'folder', reference: 'folder-path:../nope', status: 'missing', addressKind: 'by-path' },
     ]);
   });
 
@@ -259,6 +274,76 @@ describe('folders', () => {
 
     const result = await client.folders('repo1').putText({ id: 'f1' }, '# Body', 'rev9');
     expect(result.unresolvedReferences).toEqual([]);
+  });
+
+  it('reads recorded text-media references, including a 304 conditional GET', async () => {
+    const mock = new MockFetch().enqueue(
+      {
+        status: 200,
+        headers: { etag: '"rev7"' },
+        json: {
+          meta: { revision: 'rev7' },
+          records: [
+            {
+              url: 'media:550e8400-e29b-41d4-a716-446655440000',
+              sourceLocation: 'text',
+              targetKind: 'media',
+              targetId: '550e8400-e29b-41d4-a716-446655440000',
+              addressKind: 'by-id',
+              status: 'resolved',
+            },
+          ],
+          related: { mediaItems: [{ meta: {}, data: { id: '550e8400-e29b-41d4-a716-446655440000' } }] },
+        },
+      },
+      { status: 304, headers: { etag: '"rev7"' } },
+    );
+    const client = makeClient(mock);
+
+    const result = await client.folders('repo1').getTextMedia({ path: 'albums/trip' }, { acceptLanguage: 'pl-PL' });
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/path;albums;trip/text/media');
+    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
+    expect(result.notModified).toBe(false);
+    if (!result.notModified) {
+      expect(result.result.records[0]?.targetKind).toBe('media');
+      expect(result.etag).toBe('"rev7"');
+    }
+
+    const again = await client.folders('repo1').getTextMedia({ path: 'albums/trip' }, { ifNoneMatch: '"rev7"' });
+    expect(mock.last.headers.get('if-none-match')).toBe('"rev7"');
+    expect(again.notModified).toBe(true);
+  });
+
+  it('sends fields alongside the wrapped query body for media membership', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { meta: {}, records: [] } });
+    const client = makeClient(mock);
+
+    await client.folders('repo1').queryMedia({ path: '/albums' }, { limit: 10, fields: ['type', 'metadata'] });
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      query: { limit: 10 },
+      fields: 'type,metadata',
+    });
+  });
+
+  it('applies a move patch to reorder a folder media membership entry', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: [
+        { id: 'm2', filename: 'second.JPG' },
+        { id: 'm1', filename: 'first.JPG' },
+      ],
+    });
+    const client = makeClient(mock);
+
+    const result = await client
+      .folders('repo1')
+      .patchMedia(FolderById(), [{ op: 'move', filename: 'first.JPG', afterFilename: 'second.JPG' }]);
+    expect(mock.last.method).toBe('PATCH');
+    expect(JSON.parse(mock.last.body!)).toEqual([
+      { op: 'move', filename: 'first.JPG', afterFilename: 'second.JPG' },
+    ]);
+    expect(result[0]?.filename).toBe('second.JPG');
   });
 });
 
@@ -301,6 +386,29 @@ describe('media', () => {
     expect(result.data.id).toBe('m1');
   });
 
+  it('requests the metadata field explicitly via ?fields=', async () => {
+    const { MediaRef } = await import('../../src/index');
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: {},
+        data: {
+          id: 'm1',
+          type: 'image',
+          visibility: 'private',
+          originalHash: 'abc',
+          metadata: { dimensions: { width: 100, height: 100 } },
+        },
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.media('repo1').metadata(MediaRef.id('m1'), { fields: ['type', 'metadata'] });
+    const url = new URL(mock.last.url);
+    expect(url.searchParams.get('fields')).toBe('type,metadata');
+    expect(result.data.metadata?.dimensions?.width).toBe(100);
+  });
+
   it('surfaces a 304 conditional GET as notModified', async () => {
     const { MediaRef } = await import('../../src/index');
     const mock = new MockFetch().enqueue({ status: 304, headers: { etag: '"abc"' } });
@@ -312,23 +420,15 @@ describe('media', () => {
     expect(mock.last.headers.get('if-none-match')).toBe('"abc"');
   });
 
-  it('lists media referenced in a folder text body', async () => {
-    const mock = new MockFetch().enqueue({
-      status: 200,
-      headers: { etag: '"rev7"' },
-      json: { meta: { offset: null, limit: 30 }, records: [{ meta: {}, data: { id: 'm1' }, links: {} }] },
-    });
+  it('sends fields as a top-level body field on action;list', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { meta: {}, records: [] } });
     const client = makeClient(mock);
 
-    const result = await client.media('repo1').textRefs({ path: 'albums/trip' }, { acceptLanguage: 'pl-PL' });
-    expect(mock.last.method).toBe('GET');
-    expect(mock.last.url).toBe('http://localhost:8080/media/repo1/query;textrefs=path;albums;trip');
-    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
-    expect(result.notModified).toBe(false);
-    if (!result.notModified) {
-      expect(result.collection.records[0]?.data.id).toBe('m1');
-      expect(result.etag).toBe('"rev7"');
-    }
+    await client.media('repo1').list({ folder: { path: '/albums' }, fields: ['type', 'metadata'] });
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      folder: { path: '/albums' },
+      fields: 'type,metadata',
+    });
   });
 
   it('extracts image and video-poster variants from a resource, ignoring non-variant links', async () => {
@@ -467,15 +567,6 @@ describe('media', () => {
     expect(byId).toBe(playlist);
   });
 
-  it('surfaces a 304 textrefs conditional GET as notModified', async () => {
-    const mock = new MockFetch().enqueue({ status: 304, headers: { etag: '"rev7"' } });
-    const client = makeClient(mock);
-
-    const result = await client.media('repo1').textRefs({ id: 'f1' }, { ifNoneMatch: '"rev7"' });
-    expect(mock.last.headers.get('if-none-match')).toBe('"rev7"');
-    expect(result.notModified).toBe(true);
-    expect(result.etag).toBe('"rev7"');
-  });
 });
 
 function FolderById() {

@@ -29,11 +29,12 @@ const links: LinkSet = {
     template: '/media/{repoId}/{mediaItemHash}/metadata',
     fields: ['repoId', 'mediaItemHash'],
   },
-  'media:textrefs': {
-    rel: 'media:textrefs',
-    template: '/media/{repoId}/query;textrefs={folderIdOrPath}',
+  'folders:text-media': {
+    rel: 'folders:text-media',
+    template: '/folders/{repoId}/{folderIdOrPath}/text/media',
     fields: ['repoId', 'folderIdOrPath'],
   },
+  'repos:create': { rel: 'repos:create', href: '/repos' },
   'users:verify-user': {
     rel: 'users:verify-user',
     template: '/users/{userIdOrEmail}/action;verify-user',
@@ -67,11 +68,15 @@ describe('ServiceLinks', () => {
     });
   });
 
-  it('builds the textrefs media link with a folder ref segment', () => {
-    expect(sl.mediaTextRefs('repo', FolderRef.path('/albums/trip'))).toEqual({
-      rel: 'media:textrefs',
-      href: '/media/repo/query;textrefs=path;albums;trip',
+  it('builds the folder text-media link with a folder ref segment', () => {
+    expect(sl.readFolderTextMedia('repo', FolderRef.path('/albums/trip'))).toEqual({
+      rel: 'folders:text-media',
+      href: '/folders/repo/path;albums;trip/text/media',
     });
+  });
+
+  it('resolves the repos collection href, shared with repos:create', () => {
+    expect(sl.reposCollection()).toEqual({ rel: 'repos:create', href: '/repos' });
   });
 
   it('prefixes the mid; matrix segment for by-id media links', () => {

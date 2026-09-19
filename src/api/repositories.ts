@@ -5,7 +5,7 @@ import type { ReadOptions, WriteLanguageOptions } from '../types/common';
 import type { Collection } from '../types/envelope';
 import type { PageQuery } from '../types/envelope';
 import type { CreateRepositoryInput, UpdateRepositoryInput } from '../types/repositories';
-import type { IRepositoriesApi, RepositoryResource } from './repositories.api';
+import type { GetRepositoryByNameOptions, IRepositoriesApi, RepositoryResource } from './repositories.api';
 
 /** Repository endpoints. */
 export class RepositoriesApi implements IRepositoriesApi {
@@ -53,6 +53,22 @@ export class RepositoriesApi implements IRepositoriesApi {
       method: 'GET',
       path: (await this.links()).readRepo(repoId).href,
       query: readParams(options),
+      acceptLanguage: options.acceptLanguage,
+      parse: parseJson<RepositoryResource>,
+    });
+  }
+
+  /**
+   * Retrieve a repository by name, optionally qualified by organization. No
+   * dedicated link relation is advertised for this endpoint; it shares the
+   * `/repos` collection path with `repos:create`, disambiguated by method
+   * and query params.
+   */
+  async getByName(name: string, options: GetRepositoryByNameOptions = {}): Promise<RepositoryResource> {
+    return this.transport.request({
+      method: 'GET',
+      path: (await this.links()).reposCollection().href,
+      query: { ...readParams(options), org: options.org, name },
       acceptLanguage: options.acceptLanguage,
       parse: parseJson<RepositoryResource>,
     });

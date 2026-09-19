@@ -1,17 +1,11 @@
+import { fieldsParam } from '../http/language';
 import { parseJson, parseText, Transport } from '../http/transport';
 import type { LinksProvider, ServiceLinks } from '../links';
 import type { FolderRefInput, MediaRef } from '../refs';
+import type { ReadOptions } from '../types/common';
 import { isHlsRenditionLink, isMediaItemVariantLink, type Collection, type HrefLink } from '../types/envelope';
 import type { BinaryBody, DownloadResult, MediaListQuery, UploadResult } from '../types/media';
-import type {
-  DownloadOptions,
-  HlsRendition,
-  IMediaApi,
-  MediaItemVariant,
-  MediaResource,
-  TextRefsOptions,
-  TextRefsResult,
-} from './media.api';
+import type { DownloadOptions, HlsRendition, IMediaApi, MediaItemVariant, MediaResource } from './media.api';
 
 /** Media-item endpoints, scoped to a single repository. */
 export class MediaApi implements IMediaApi {
@@ -159,11 +153,16 @@ export class MediaApi implements IMediaApi {
     });
   }
 
-  /** Read a media item's metadata and variant links. */
-  async metadata(ref: MediaRef): Promise<MediaResource> {
+  /**
+   * Read a media item's metadata and variant links. `fields` selects among
+   * `type`, `visibility`, `originalHash`, and `metadata` (`id` is always
+   * included); defaults to every field except `metadata`.
+   */
+  async metadata(ref: MediaRef, options: Pick<ReadOptions, 'fields'> = {}): Promise<MediaResource> {
     return this.transport.request({
       method: 'GET',
       path: this.metadataLink(await this.links(), ref).href,
+      query: { fields: fieldsParam(options.fields) },
       parse: parseJson<MediaResource>,
     });
   }
@@ -206,36 +205,13 @@ export class MediaApi implements IMediaApi {
 
   /** List media items in a folder. */
   async list(query: MediaListQuery, options: { acceptLanguage?: string } = {}): Promise<Collection<MediaResource>> {
+    const { fields, ...rest } = query;
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).listMedia(this.repoId).href,
       acceptLanguage: options.acceptLanguage,
-      body: { kind: 'json', value: query },
+      body: { kind: 'json', value: { ...rest, fields: fieldsParam(fields) } },
       parse: parseJson<Collection<MediaResource>>,
-    });
-  }
-
-  /**
-   * List every media item referenced in the text body of `folder` (the
-   * resolved `mid:`/`img:` references). The language is selected from
-   * `acceptLanguage` (defaulting to the client's language). Supports a
-   * conditional GET via `ifNoneMatch`; an ETag match yields `notModified: true`.
-   */
-  async textRefs(folder: FolderRefInput, options: TextRefsOptions = {}): Promise<TextRefsResult> {
-    const ifNoneMatch = Array.isArray(options.ifNoneMatch) ? options.ifNoneMatch.join(', ') : options.ifNoneMatch;
-    return this.transport.request({
-      method: 'GET',
-      path: (await this.links()).mediaTextRefs(this.repoId, folder).href,
-      acceptLanguage: options.acceptLanguage,
-      headers: { 'if-none-match': ifNoneMatch },
-      allowStatuses: [304],
-      parse: async (res): Promise<TextRefsResult> => {
-        const etag = res.headers.get('etag');
-        if (res.status === 304) {
-          return { notModified: true, etag };
-        }
-        return { notModified: false, collection: (await res.json()) as Collection<MediaResource>, etag };
-      },
     });
   }
 }

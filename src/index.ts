@@ -6,7 +6,7 @@ export type { ClientOptions, FetchLike } from './config';
 // Resource API interfaces (the user-facing types for the sub-clients).
 export type { IAuthApi } from './api/auth.api';
 export type { IUsersApi } from './api/users.api';
-export type { IRepositoriesApi, RepositoryResource } from './api/repositories.api';
+export type { IRepositoriesApi, RepositoryResource, GetRepositoryByNameOptions } from './api/repositories.api';
 export type {
   IFoldersApi,
   FolderResource,
@@ -14,6 +14,10 @@ export type {
   MediaMembershipCollection,
   PermissionsCollection,
   PutTextResult,
+  TextMediaCollection,
+  TextMediaOptions,
+  TextMediaRelated,
+  TextMediaResult,
   UnresolvedReference,
 } from './api/folders.api';
 export type {
@@ -22,8 +26,6 @@ export type {
   HlsRendition,
   MediaItemVariant,
   MediaResource,
-  TextRefsOptions,
-  TextRefsResult,
 } from './api/media.api';
 export type { IServiceRootApi, ServiceRoot } from './api/service-root.api';
 export { ServiceLinks } from './links';
@@ -84,12 +86,19 @@ export type {
   MediaMembershipPatch,
   MediaMembershipQuery,
   PermissionRecord,
+  TextMediaRecord,
   TreeQuery,
   UpdateFolderInput,
 } from './types/folders';
 export type {
   BinaryBody,
   DownloadResult,
+  MediaCamera,
+  MediaCaptureTime,
+  MediaDimensions,
+  MediaEffectiveMetadata,
+  MediaFormatInfo,
+  MediaListOrderBy,
   MediaListQuery,
   MediaMetadata,
   MediaType,

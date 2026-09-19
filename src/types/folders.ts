@@ -15,7 +15,11 @@ export interface Folder {
   type?: FolderType;
   /** Single string in `standard`; all-languages object in `original`. */
   title?: Localized;
-  /** Arbitrary typed content JSON; shape depends on `type`. */
+  /**
+   * Arbitrary typed content JSON; shape depends on `type`. A reserved `text`
+   * key, present on any folder type, carries the folder's associated object
+   * data for markdown embeds (see `docs/folder_text.md#associated-object-data`).
+   */
   data?: Record<string, unknown>;
   /** First 250 chars of the localized markdown body (standard representation only). */
   textPreview?: string;
@@ -68,7 +72,15 @@ export interface MediaMembership {
 
 /** Ordering for a media-membership query. */
 export interface MediaMembershipOrderBy {
-  property: 'filename' | 'creationTime';
+  /**
+   * - `"filename"`, `"creationTime"`
+   * - `"captureTime"` — the item's effective capture time, once metadata
+   *   extraction has populated it (see `docs/media_metadata.md`); items with
+   *   no extracted capture time sort last regardless of `order`
+   * - `"custom"` — the folder's persisted, user-arrangeable order (see the
+   *   `move` op on {@link MediaMembershipPatch})
+   */
+  property: 'filename' | 'creationTime' | 'captureTime' | 'custom';
   order: 'ascending' | 'descending';
 }
 
@@ -80,14 +92,35 @@ export interface MediaMembershipQuery {
   limit?: number;
   /** Wildcard to filter filenames on, e.g. `*.jpg`. */
   filename?: string;
-  /** Result ordering; defaults to the server's natural order when omitted. */
+  /** Defaults to `{ property: 'custom', order: 'ascending' }` when omitted. */
   orderBy?: MediaMembershipOrderBy;
+  /** Field selector applied to `related.mediaitem` entries. */
+  fields?: string | string[];
 }
 
 /** A patch op applied to a folder's direct media membership. */
 export type MediaMembershipPatch =
   | { op: 'add'; id: string; filename: string }
-  | { op: 'remove'; filename: string };
+  | { op: 'remove'; filename: string }
+  | {
+      op: 'move';
+      filename: string;
+      /** Moves after this filename's link, or to the front when `null`/omitted. */
+      afterFilename?: string | null;
+    };
+
+/** A single reference recorded from a folder's text body / associated object data. */
+export interface TextMediaRecord {
+  /** The original `scheme:target` reference text, e.g. `folder-path:../My album` or `media:<uuid>`. */
+  url: string;
+  /** Where the reference was found, e.g. `"text"` (more locations may be added later). */
+  sourceLocation: string;
+  targetKind: 'folder' | 'media';
+  targetId: string;
+  addressKind: 'by-id' | 'by-path';
+  /** Whether the target currently exists, independent of the caller's read permissions. */
+  status: 'resolved' | 'missing' | 'malformed';
+}
 
 /** Query for `action;tree`. */
 export interface TreeQuery {

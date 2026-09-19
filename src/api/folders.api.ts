@@ -9,6 +9,7 @@ import type {
   MediaMembershipPatch,
   MediaMembershipQuery,
   PermissionRecord,
+  TextMediaRecord,
   TreeQuery,
   UpdateFolderInput,
 } from '../types/folders';
@@ -22,6 +23,28 @@ export type MediaMembershipCollection = Collection<
   { mediaitem?: Resource<MediaMetadata>[] }
 >;
 
+/** Related resources attached to a {@link IFoldersApi.getTextMedia} response. */
+export interface TextMediaRelated {
+  folders?: FolderResource[];
+  mediaItems?: Resource<MediaMetadata>[];
+}
+
+/** Collection returned by {@link IFoldersApi.getTextMedia}. */
+export type TextMediaCollection = Collection<TextMediaRecord, TextMediaRelated>;
+
+/** Options for {@link IFoldersApi.getTextMedia}. */
+export interface TextMediaOptions {
+  /** Language version of the folder text to resolve references against. */
+  acceptLanguage?: string;
+  /** `If-None-Match` value(s) for a conditional GET (the ETag tracks the folder revision). */
+  ifNoneMatch?: string | string[];
+}
+
+/** A folder's text-reference listing (200) or a not-modified result (304). */
+export type TextMediaResult =
+  | { notModified: false; result: TextMediaCollection; etag: string | null }
+  | { notModified: true; etag: string | null };
+
 /** Full markdown body of a folder's `text` subresource plus its metadata. */
 export interface FolderText {
   text: string;
@@ -33,10 +56,13 @@ export interface FolderText {
 
 /** A markdown reference that did not resolve to an existing folder/media item. */
 export interface UnresolvedReference {
-  /** `media` for `mid:`/`img:` references, `folder` for `folderid:`/`folder:`. */
+  /** `media` for `media:`/`media-path:` references, `folder` for `folder:`/`folder-path:`. */
   type: 'media' | 'folder';
   /** The original `scheme:target` reference text. */
   reference: string;
+  /** `missing` (well-formed, no such target) or `malformed` (bad UUID, or a path escaping the repository root). */
+  status: 'missing' | 'malformed';
+  addressKind: 'by-id' | 'by-path';
 }
 
 /** Result of storing a folder's markdown body via {@link IFoldersApi.putText}. */
@@ -45,8 +71,9 @@ export interface PutTextResult {
   revision: string | null;
   /**
    * References found in the body that did not resolve to an existing folder or
-   * media item; empty when every reference resolved. Resolved references are
-   * persisted server-side.
+   * media item; empty when every reference resolved. Every reference found —
+   * resolved, missing, or malformed alike — is persisted server-side and can
+   * be queried later via {@link IFoldersApi.getTextMedia}.
    */
   unresolvedReferences: UnresolvedReference[];
 }
@@ -92,9 +119,11 @@ export interface IFoldersApi {
 
   /**
    * Store the folder's markdown body under `Content-Language`, preserving other
-   * languages. `revision` must match the folder's current revision. The body is
-   * scanned for `mid:`/`img:`/`folderid:`/`folder:` references: resolved ones
-   * are persisted, and any that don't resolve are returned in
+   * languages. `revision` must match the folder's current revision. The body
+   * (GFM plus `::media`/`::gallery` embed directives) is scanned for
+   * `media:`/`media-path:`/`folder:`/`folder-path:` references: every
+   * reference found is persisted (resolved, missing, or malformed alike), and
+   * ones that don't resolve are also reported in
    * {@link PutTextResult.unresolvedReferences}. Returns the new revision.
    */
   putText(
@@ -103,6 +132,15 @@ export interface IFoldersApi {
     revision: string,
     options?: Pick<WriteLanguageOptions, 'contentLanguage'>,
   ): Promise<PutTextResult>;
+
+  /**
+   * Return every reference recorded from the folder's text body / associated
+   * object data, re-resolved against current repository state. The language
+   * is selected from `acceptLanguage` (defaulting to the client's language).
+   * Supports a conditional GET via `ifNoneMatch`; an ETag match yields
+   * `notModified: true`.
+   */
+  getTextMedia(ref: FolderRefInput, options?: TextMediaOptions): Promise<TextMediaResult>;
 
   /** List all permissions on a folder. */
   getPermissions(ref: FolderRefInput, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<PermissionsCollection>;
@@ -114,7 +152,11 @@ export interface IFoldersApi {
     options?: Pick<ReadOptions, 'acceptLanguage'>,
   ): Promise<void>;
 
-  /** List the folder's direct media-item membership. */
+  /**
+   * List the folder's direct media-item membership, in the folder's custom
+   * order (see the `move` op on {@link MediaMembershipPatch}). A newly linked
+   * item is appended to the end of that order.
+   */
   getMedia(ref: FolderRefInput): Promise<MediaMembership[]>;
 
   /**
@@ -128,9 +170,16 @@ export interface IFoldersApi {
     options?: Pick<ReadOptions, 'acceptLanguage'>,
   ): Promise<MediaMembershipCollection>;
 
-  /** Replace the folder's direct media membership with exactly `members`. */
+  /**
+   * Replace the folder's direct media membership with exactly `members`. The
+   * supplied array's order becomes the folder's new custom order.
+   */
   putMedia(ref: FolderRefInput, members: MediaMembership[]): Promise<void>;
 
-  /** Apply an ordered list of membership patches; returns the resulting membership. */
+  /**
+   * Apply an ordered list of membership patches (`add`, `remove`, or `move` —
+   * see {@link MediaMembershipPatch}); returns the resulting membership in
+   * the folder's custom order.
+   */
   patchMedia(ref: FolderRefInput, patches: MediaMembershipPatch[]): Promise<MediaMembership[]>;
 }

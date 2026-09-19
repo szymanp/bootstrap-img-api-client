@@ -4,6 +4,12 @@ import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from '.
 
 export type RepositoryResource = Resource<Repository>;
 
+/** Options for {@link IRepositoriesApi.getByName}. */
+export interface GetRepositoryByNameOptions extends ReadOptions {
+  /** Organization qualifying the repository name. */
+  org?: string;
+}
+
 /** Repository endpoints. */
 export interface IRepositoriesApi {
   /**
@@ -17,6 +23,9 @@ export interface IRepositoriesApi {
 
   /** Retrieve a repository. */
   get(repoId: string, options?: ReadOptions): Promise<RepositoryResource>;
+
+  /** Retrieve a repository by name, optionally qualified by organization. */
+  getByName(name: string, options?: GetRepositoryByNameOptions): Promise<RepositoryResource>;
 
   /**
    * Partially update a repository. `revision` is the current `meta.revision`

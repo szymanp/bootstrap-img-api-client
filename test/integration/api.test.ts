@@ -99,7 +99,7 @@ run('integration (live server)', () => {
     }
   });
 
-  it('extracts text references and lists them via media textrefs', async () => {
+  it('extracts text references and lists them via the text/media subresource', async () => {
     const repo = await client.repos.create({ name: `repo-${randomUUID()}`, title: 'Textrefs Repo' });
     const repoId = repo.data.id;
 
@@ -125,29 +125,31 @@ run('integration (live server)', () => {
       // guaranteed-broken one. The broken reference must be reported; the good
       // one must not.
       const body = uploaded
-        ? '# Trip\n\n![cover](img:./cover.jpg)\n\nBroken: ![x](img:./missing.jpg)\n'
-        : '# Trip\n\nBroken: ![x](img:./missing.jpg)\n';
+        ? '# Trip\n\n![cover](media-path:./cover.jpg)\n\nBroken: ![x](media-path:./missing.jpg)\n'
+        : '# Trip\n\nBroken: ![x](media-path:./missing.jpg)\n';
       const put = await folders.putText(tripRef, body, trip.meta.revision!);
       expect(put.revision).toBeTruthy();
 
       const brokenRefs = put.unresolvedReferences.map((r) => r.reference);
-      expect(brokenRefs).toContain('img:./missing.jpg');
-      expect(put.unresolvedReferences.find((r) => r.reference === 'img:./missing.jpg')?.type).toBe('media');
+      expect(brokenRefs).toContain('media-path:./missing.jpg');
+      const missing = put.unresolvedReferences.find((r) => r.reference === 'media-path:./missing.jpg');
+      expect(missing?.type).toBe('media');
+      expect(missing?.status).toBe('missing');
       if (uploaded) {
-        expect(brokenRefs).not.toContain('img:./cover.jpg');
+        expect(brokenRefs).not.toContain('media-path:./cover.jpg');
       }
 
-      // List the media resolved from the body's references.
-      const refs = await media.textRefs(tripRef);
+      // List the references recorded from the body.
+      const refs = await folders.getTextMedia(tripRef);
       expect(refs.notModified).toBe(false);
       if (!refs.notModified) {
         if (uploaded) {
-          expect(refs.collection.records.some((r) => r.data.id === upload.mediaItemId)).toBe(true);
+          expect(refs.result.related?.mediaItems?.some((m) => m.data.id === upload.mediaItemId)).toBe(true);
         }
 
         // Conditional GET with the returned ETag -> 304 (the ETag tracks the revision).
         if (refs.etag) {
-          const again = await media.textRefs(tripRef, { ifNoneMatch: refs.etag });
+          const again = await folders.getTextMedia(tripRef, { ifNoneMatch: refs.etag });
           expect(again.notModified).toBe(true);
         }
       }

@@ -31,6 +31,11 @@ export const serviceRootFixture: ServiceRoot = {
       template: '/folders/{repoId}/{folderIdOrPath}/text',
       fields: ['repoId', 'folderIdOrPath'],
     },
+    'folders:text-media': {
+      rel: 'folders:text-media',
+      template: '/folders/{repoId}/{folderIdOrPath}/text/media',
+      fields: ['repoId', 'folderIdOrPath'],
+    },
     'folders:patch-media': {
       rel: 'folders:patch-media',
       template: '/folders/{repoId}/{folderIdOrPath}/media',
@@ -88,11 +93,6 @@ export const serviceRootFixture: ServiceRoot = {
     },
     'repos:update': { rel: 'repos:update', template: '/repos/{repoId}', fields: ['repoId'] },
     'media:list': { rel: 'media:list', template: '/media/{repoId}/action;list', fields: ['repoId'] },
-    'media:textrefs': {
-      rel: 'media:textrefs',
-      template: '/media/{repoId}/query;textrefs={folderIdOrPath}',
-      fields: ['repoId', 'folderIdOrPath'],
-    },
     'media:download': {
       rel: 'media:download',
       template: '/media/{repoId}/{folderIdOrPath}/{filename}',

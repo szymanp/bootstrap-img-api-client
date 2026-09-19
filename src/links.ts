@@ -85,6 +85,16 @@ export class ServiceLinks {
     return this.resolve('repos:delete', { repoId: encode(repoId) });
   }
 
+  /**
+   * The `/repos` collection path. No dedicated link relation is advertised
+   * for `GET /repos?org=&name=` (repository lookup by name) — it shares this
+   * path with `repos:create` (`POST /repos`), disambiguated by method and
+   * query params.
+   */
+  reposCollection(): HrefLink {
+    return this.href('repos:create');
+  }
+
   // --- folders ---
 
   /** `folders:create` — create a folder under a parent. */
@@ -132,6 +142,11 @@ export class ServiceLinks {
     return this.resolve('folders:update-text', this.folderFields(repoId, folder));
   }
 
+  /** `folders:text-media` — list references recorded from a folder's text body. */
+  readFolderTextMedia(repoId: string, folder: FolderRefInput): HrefLink {
+    return this.resolve('folders:text-media', this.folderFields(repoId, folder));
+  }
+
   /** `folders:list-permissions` — list a folder's permissions. */
   listFolderPermissions(repoId: string, folder: FolderRefInput): HrefLink {
     return this.resolve('folders:list-permissions', this.folderFields(repoId, folder));
@@ -167,11 +182,6 @@ export class ServiceLinks {
   /** `media:list` — list media items in a repository. */
   listMedia(repoId: string): HrefLink {
     return this.resolve('media:list', { repoId: encode(repoId) });
-  }
-
-  /** `media:textrefs` — list media referenced in a folder's text body. */
-  mediaTextRefs(repoId: string, folder: FolderRefInput): HrefLink {
-    return this.resolve('media:textrefs', this.folderFields(repoId, folder));
   }
 
   /** `media:download-by-id` — download a media binary by its stable id. */

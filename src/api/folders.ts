@@ -20,6 +20,9 @@ import type {
   MediaMembershipCollection,
   PermissionsCollection,
   PutTextResult,
+  TextMediaCollection,
+  TextMediaOptions,
+  TextMediaResult,
   UnresolvedReference,
 } from './folders.api';
 
@@ -145,9 +148,11 @@ export class FoldersApi implements IFoldersApi {
 
   /**
    * Store the folder's markdown body under `Content-Language`, preserving other
-   * languages. `revision` must match the folder's current revision. The body is
-   * scanned for `mid:`/`img:`/`folderid:`/`folder:` references: resolved ones
-   * are persisted, and any that don't resolve are returned in
+   * languages. `revision` must match the folder's current revision. The body
+   * (GFM plus `::media`/`::gallery` embed directives) is scanned for
+   * `media:`/`media-path:`/`folder:`/`folder-path:` references: every
+   * reference found is persisted (resolved, missing, or malformed alike), and
+   * ones that don't resolve are also reported in
    * {@link PutTextResult.unresolvedReferences}. Returns the new revision.
    */
   async putText(
@@ -171,6 +176,31 @@ export class FoldersApi implements IFoldersApi {
           revision: res.headers.get('revision-id') ?? body.meta?.revision ?? null,
           unresolvedReferences: body.validation?.unresolvedReferences ?? [],
         };
+      },
+    });
+  }
+
+  /**
+   * Return every reference recorded from the folder's text body / associated
+   * object data, re-resolved against current repository state. The language
+   * is selected from `acceptLanguage` (defaulting to the client's language).
+   * Supports a conditional GET via `ifNoneMatch`; an ETag match yields
+   * `notModified: true`.
+   */
+  async getTextMedia(ref: FolderRefInput, options: TextMediaOptions = {}): Promise<TextMediaResult> {
+    const ifNoneMatch = Array.isArray(options.ifNoneMatch) ? options.ifNoneMatch.join(', ') : options.ifNoneMatch;
+    return this.transport.request({
+      method: 'GET',
+      path: (await this.links()).readFolderTextMedia(this.repoId, ref).href,
+      acceptLanguage: options.acceptLanguage,
+      headers: { 'if-none-match': ifNoneMatch },
+      allowStatuses: [304],
+      parse: async (res): Promise<TextMediaResult> => {
+        const etag = res.headers.get('etag');
+        if (res.status === 304) {
+          return { notModified: true, etag };
+        }
+        return { notModified: false, result: (await res.json()) as TextMediaCollection, etag };
       },
     });
   }
@@ -203,7 +233,10 @@ export class FoldersApi implements IFoldersApi {
     });
   }
 
-  /** List the folder's direct media-item membership. */
+  /**
+   * List the folder's direct media-item membership, in the folder's custom
+   * order. A newly linked item is appended to the end of that order.
+   */
   async getMedia(ref: FolderRefInput): Promise<MediaMembership[]> {
     return this.transport.request({
       method: 'GET',
@@ -222,16 +255,20 @@ export class FoldersApi implements IFoldersApi {
     query: MediaMembershipQuery = {},
     options: Pick<ReadOptions, 'acceptLanguage'> = {},
   ): Promise<MediaMembershipCollection> {
+    const { fields, ...rest } = query;
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).queryFolderMedia(this.repoId, ref).href,
       acceptLanguage: options.acceptLanguage,
-      body: { kind: 'json', value: { query } },
+      body: { kind: 'json', value: { query: rest, fields: fieldsParam(fields) } },
       parse: parseJson<MediaMembershipCollection>,
     });
   }
 
-  /** Replace the folder's direct media membership with exactly `members`. */
+  /**
+   * Replace the folder's direct media membership with exactly `members`. The
+   * supplied array's order becomes the folder's new custom order.
+   */
   async putMedia(ref: FolderRefInput, members: MediaMembership[]): Promise<void> {
     return this.transport.request({
       method: 'PUT',
@@ -241,7 +278,10 @@ export class FoldersApi implements IFoldersApi {
     });
   }
 
-  /** Apply an ordered list of membership patches; returns the resulting membership. */
+  /**
+   * Apply an ordered list of membership patches (`add`, `remove`, or `move`);
+   * returns the resulting membership in the folder's custom order.
+   */
   async patchMedia(ref: FolderRefInput, patches: MediaMembershipPatch[]): Promise<MediaMembership[]> {
     return this.transport.request({
       method: 'PATCH',
