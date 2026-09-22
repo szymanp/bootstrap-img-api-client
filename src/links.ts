@@ -95,6 +95,26 @@ export class ServiceLinks {
     return this.href('repos:create');
   }
 
+  /** `repos:changelog` — read a repository's audit log. */
+  changelog(repoId: string): HrefLink {
+    return this.resolve('repos:changelog', { repoId: encode(repoId) });
+  }
+
+  /** `repos:metadata-snapshot-create` — start building a metadata snapshot. */
+  createMetadataSnapshot(repoId: string): HrefLink {
+    return this.resolve('repos:metadata-snapshot-create', { repoId: encode(repoId) });
+  }
+
+  /** `repos:metadata-snapshot-read` — poll or page through a metadata snapshot. */
+  readMetadataSnapshot(repoId: string, snapshotId: string): HrefLink {
+    return this.resolve('repos:metadata-snapshot-read', { repoId: encode(repoId), snapshotId: encode(snapshotId) });
+  }
+
+  /** `repos:metadata-sync` — atomically apply a metadata-sync plan. */
+  metadataSync(repoId: string): HrefLink {
+    return this.resolve('repos:metadata-sync', { repoId: encode(repoId) });
+  }
+
   // --- folders ---
 
   /** `folders:create` — create a folder under a parent. */

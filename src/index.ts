@@ -6,7 +6,17 @@ export type { ClientOptions, FetchLike } from './config';
 // Resource API interfaces (the user-facing types for the sub-clients).
 export type { IAuthApi } from './api/auth.api';
 export type { IUsersApi } from './api/users.api';
-export type { IRepositoriesApi, RepositoryResource, GetRepositoryByNameOptions } from './api/repositories.api';
+export type {
+  IRepositoriesApi,
+  RepositoryResource,
+  GetRepositoryByNameOptions,
+  ChangelogCollection,
+  CreateMetadataSnapshotResult,
+  MetadataSnapshotMeta,
+  MetadataSnapshotQuery,
+  MetadataSnapshotResult,
+  MetadataSyncResult,
+} from './api/repositories.api';
 export type {
   IFoldersApi,
   FolderResource,
@@ -75,6 +85,26 @@ export type {
 } from './types/common';
 export type { Session, SendTokenResult } from './types/auth';
 export type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from './types/repositories';
+export type { AuditLogEntry } from './types/changelog';
+export type {
+  CreateMetadataSnapshotInput,
+  FolderSnapshotRecord,
+  MediaItemSnapshotRecord,
+  MetadataSnapshotAspect,
+  MetadataSnapshotRecord,
+  MetadataSnapshotScope,
+  RepositorySnapshotRecord,
+} from './types/metadata-snapshot';
+export type {
+  FolderCreateOperation,
+  FolderDeleteOperation,
+  FolderUpdateChanges,
+  FolderUpdateOperation,
+  MetadataSyncOperation,
+  MetadataSyncPlan,
+  MetadataSyncTextChanges,
+  RepositoryUpdateOperation,
+} from './types/metadata-sync';
 export type {
   CreateFolderInput,
   Folder,

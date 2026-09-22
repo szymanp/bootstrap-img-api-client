@@ -167,6 +167,199 @@ describe('repositories', () => {
     expect(url.searchParams.get('org')).toBe('acme');
     expect(url.searchParams.get('name')).toBe('my-repo');
   });
+
+  it('pages through the audit log', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: { offset: 0, limit: 20 },
+        records: [
+          {
+            data: {
+              id: 42,
+              principalId: null,
+              timestamp: '2026-01-01T00:00:00Z',
+              description: { type: 'repository_renamed', data: { oldName: 'old', newName: 'new' } },
+            },
+          },
+        ],
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.repos.getChangelog('id1', { offset: 20, limit: 10 });
+    const url = new URL(mock.last.url);
+    expect(mock.last.method).toBe('GET');
+    expect(url.pathname).toBe('/repos/id1/changelog');
+    expect(url.searchParams.get('offset')).toBe('20');
+    expect(url.searchParams.get('limit')).toBe('10');
+    expect(result.records[0]?.data.principalId).toBeNull();
+    expect(result.records[0]?.data.description.type).toBe('repository_renamed');
+  });
+
+  it('starts a metadata snapshot and parses the 202 body', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 202,
+      headers: { location: '/repos/id1/metadata-snapshots/snap-1' },
+      json: { meta: { snapshot: 'snap-1', createdAt: '2026-09-20T10:00:00Z' } },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.repos.createMetadataSnapshot('id1', {
+      formatVersion: 1,
+      scope: { roots: ['/albums'], include: ['repository', 'folder-data'] },
+    });
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.url).toBe('http://localhost:8080/repos/id1/metadata-snapshots');
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      formatVersion: 1,
+      scope: { roots: ['/albums'], include: ['repository', 'folder-data'] },
+    });
+    expect(result).toEqual({ snapshotId: 'snap-1', createdAt: '2026-09-20T10:00:00Z' });
+  });
+
+  it('reports a building snapshot as 204 without parsing a body', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    const result = await client.repos.getMetadataSnapshot('id1', 'snap-1', { wait: 5 });
+    const url = new URL(mock.last.url);
+    expect(url.pathname).toBe('/repos/id1/metadata-snapshots/snap-1');
+    expect(url.searchParams.get('wait')).toBe('5');
+    expect(result).toEqual({ status: 'building' });
+  });
+
+  it('reads a ready snapshot page, including repository/folder/media-item records', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: {
+          snapshot: 'snap-1',
+          repositoryVersion: 42,
+          scopeHash: 'abc',
+          formatVersion: 1,
+          createdAt: '2026-09-20T10:00:00Z',
+          limit: 100,
+          offset: 0,
+        },
+        records: [
+          {
+            type: 'repository',
+            revision: 'rev-repo',
+            value: { name: 'demo', title: 'Demo', owners: [], editors: [] },
+          },
+          {
+            type: 'folder',
+            id: 'folder-uuid',
+            revision: 'rev-folder',
+            parent: { path: '/albums' },
+            name: 'narty',
+            data: { type: 'album', title: { 'en-us': 'Skiing' } },
+            texts: { 'en-us': 'body' },
+            permissions: [],
+            media: [],
+          },
+          {
+            type: 'media-item',
+            id: 'media-uuid',
+            value: { type: 'image', visibility: 'normal', originalHash: 'hash' },
+          },
+        ],
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.repos.getMetadataSnapshot('id1', 'snap-1');
+    expect(result.status).toBe('ready');
+    if (result.status === 'ready') {
+      expect(result.meta).toEqual({
+        snapshotId: 'snap-1',
+        repositoryVersion: 42,
+        scopeHash: 'abc',
+        formatVersion: 1,
+        createdAt: '2026-09-20T10:00:00Z',
+        limit: 100,
+        offset: 0,
+      });
+      expect(result.records).toHaveLength(3);
+      expect(result.records[0]).toMatchObject({ type: 'repository' });
+      expect(result.records[1]).toMatchObject({ type: 'folder', id: 'folder-uuid' });
+      expect(result.records[2]).toMatchObject({ type: 'media-item', id: 'media-uuid' });
+    }
+  });
+
+  it('surfaces a failed snapshot build as a typed 410 ApiError', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 410,
+      headers: { 'content-type': 'application/problem+json' },
+      body: JSON.stringify({
+        type: ErrorType.MetadataSnapshotFailed,
+        status: 410,
+        detail: 'build failed: disk full',
+      }),
+    });
+    const client = makeClient(mock);
+
+    const err = await client.repos.getMetadataSnapshot('id1', 'snap-1').catch((e) => e);
+    expect(isApiError(err, ErrorType.MetadataSnapshotFailed)).toBe(true);
+    expect(err.problem.detail).toBe('build failed: disk full');
+  });
+
+  it('applies a metadata-sync plan with If-Match and Idempotency-Key headers', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      headers: { etag: '"repository-metadata:43"' },
+      json: {
+        meta: {
+          operation: '0be4aa18-ee30-4f99-9025-f5f19368bb30',
+          previousRepositoryVersion: 42,
+          repositoryVersion: 43,
+        },
+        data: { revisions: { repository: 'new-repository-revision-uuid' } },
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.repos.applyMetadataSync(
+      'id1',
+      42,
+      '0be4aa18-ee30-4f99-9025-f5f19368bb30',
+      {
+        operations: [
+          { op: 'repository.update', expectedRevision: 'old-repository-revision-uuid', name: 'piotrek' },
+        ],
+      },
+    );
+
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.url).toBe('http://localhost:8080/repos/id1/metadata-sync');
+    expect(mock.last.headers.get('if-match')).toBe('"repository-metadata:42"');
+    expect(mock.last.headers.get('idempotency-key')).toBe('0be4aa18-ee30-4f99-9025-f5f19368bb30');
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      meta: { formatVersion: 1 },
+      operations: [{ op: 'repository.update', expectedRevision: 'old-repository-revision-uuid', name: 'piotrek' }],
+    });
+    expect(result).toEqual({
+      operationId: '0be4aa18-ee30-4f99-9025-f5f19368bb30',
+      previousRepositoryVersion: 42,
+      repositoryVersion: 43,
+      revisions: { repository: 'new-repository-revision-uuid' },
+    });
+  });
+
+  it('surfaces a reused idempotency key as a typed 409 ApiError', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 409,
+      headers: { 'content-type': 'application/problem+json' },
+      body: JSON.stringify({ type: ErrorType.IdempotencyKeyReused, status: 409 }),
+    });
+    const client = makeClient(mock);
+
+    const err = await client.repos
+      .applyMetadataSync('id1', 42, 'dup-key', { operations: [] })
+      .catch((e) => e);
+    expect(isApiError(err, ErrorType.IdempotencyKeyReused)).toBe(true);
+  });
 });
 
 describe('folders', () => {

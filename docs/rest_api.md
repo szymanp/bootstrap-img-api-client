@@ -58,6 +58,7 @@ The machine-readable `type` is the stable discriminator. Known values:
 | `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
 | `urn:bootstrap:error:revision-conflict` | 409 |
 | `urn:bootstrap:error:unsupported-media-type` | 415 |
+| `urn:bootstrap:error:metadata-snapshot-failed` | 410 |
 | `urn:bootstrap:error:internal-error` | 500 |
 
 ---
@@ -107,6 +108,10 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `repos:read` | template | `GET /repos/{repoId}` |
 | `repos:update` | template | `POST /repos/{repoId}` |
 | `repos:delete` | template | `DELETE /repos/{repoId}` |
+| `repos:changelog` | template | `GET /repos/{repoId}/changelog` |
+| `repos:metadata-snapshot-create` | template | `POST /repos/{repoId}/metadata-snapshots` |
+| `repos:metadata-snapshot-read` | template | `GET /repos/{repoId}/metadata-snapshots/{snapshotId}` |
+| `repos:metadata-sync` | template | `POST /repos/{repoId}/metadata-sync` |
 
 ##### Folders
 
@@ -394,6 +399,272 @@ Deletes a repository.
 - `204 No Content`
 - `404 Not Found`
 - `409 Conflict` — revision mismatch
+
+---
+
+### GET /repos/{repoId}/changelog
+
+Retrieves the repository's audit log (`repository_audit` entries), most recent first. The caller must be a
+repository owner or editor.
+
+#### Query parameters
+
+- `offset` (optional, default `0`)
+- `limit` (optional, default `20`)
+
+#### Response body
+
+```json
+{
+  "meta": { "offset": 0, "limit": 20 },
+  "records": [
+    {
+      "data": {
+        "id": 42,
+        "principalId": "…",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "description": { "type": "repository_renamed", "data": { "oldName": "old", "newName": "new" } }
+      }
+    }
+  ]
+}
+```
+
+`principalId` is `null` for system-attributed events. `description.type` is one of the audit event kinds
+(`repository_created`, `repository_renamed`, `repository_title_changed`, `owner_added`/`owner_removed`,
+`editor_added`/`editor_removed`, or one of the `folder_*` events); `description.data` carries that event's own
+fields.
+
+#### Responses
+
+- `200 OK`
+- `403 Forbidden` — caller is not an owner or editor of the repository
+- `404 Not Found`
+
+---
+
+## Repository Metadata Snapshots
+
+A point-in-time consistent read of a repository's folder/text/permissions/media metadata — backs the planned Git-like
+CLI sync tool's "consistent read snapshot" requirement. See `docs/metadata_snapshot_plan.md` for the design and
+implementation notes; this section documents the resulting endpoints. Both endpoints require repository **owner or
+editor** access (`RepositoryPermission.Edit`), since a `Ready` snapshot exposes `folder_permissions` wholesale —
+repository-admin-grade information, not just what the caller can individually read.
+
+### POST /repos/{repoId}/metadata-snapshots
+
+Starts building a snapshot. Snapshot creation is always asynchronous — this always returns `202 Accepted` with a
+`Location` header; poll `GET /repos/{repoId}/metadata-snapshots/{snapshotId}` until it returns `200`.
+
+#### Request body
+
+```json
+{
+  "formatVersion": 1,
+  "scope": {
+    "roots": ["/albums"],
+    "include": ["repository", "folder-data", "folder-text", "folder-permissions", "folder-media"]
+  }
+}
+```
+
+`scope.roots` are repository-relative folder paths (same `/`-separated form as folder JSON references elsewhere in
+this API); the snapshot covers each named folder and everything beneath it. `scope.include` is optional — omitted, it
+defaults to every aspect except `media-item-overrides` (there is no authored media-item override API yet, so
+requesting it fails with `422`).
+
+#### Responses
+
+- `202 Accepted` — `{ "meta": { "snapshot": "<id>", "createdAt": "…" } }`, `Location: /repos/{repoId}/metadata-snapshots/{snapshotId}`
+- `403 Forbidden` — caller is not an owner or editor of the repository
+- `404 Not Found` — repository not found
+- `422 Unprocessable Entity` — `scope.roots` names a folder outside the repository, or `scope.include` requests `media-item-overrides`
+
+---
+
+### GET /repos/{repoId}/metadata-snapshots/{snapshotId}
+
+Polls a snapshot's build status, or (once ready) returns a page of its records.
+
+#### Query parameters
+
+- `offset` (optional, default `0`)
+- `limit` (optional, default `100`)
+- `wait` (optional, default `0`) — if the snapshot is still `Building`, long-polls (holding the request open) for up
+  to this many seconds for it to finish, instead of returning `204` immediately. Returns as soon as the snapshot
+  leaves `Building`; still returns `204 No Content` if it's still `Building` when `wait` elapses. Clamped server-side
+  to a configured maximum (`metadata_snapshots.max_wait_seconds` in `config/app.conf`, default `30`) — a larger value
+  is silently capped, not rejected.
+
+#### Response body (once ready)
+
+```json5
+{
+  "meta": {
+    "snapshot": "opaque-snapshot-token",
+    "repositoryVersion": 42,
+    "scopeHash": "sha256-hex",
+    "formatVersion": 1,
+    "createdAt": "2026-09-20T10:00:00Z",
+    "limit": 100,
+    "offset": 0
+  },
+  "records": [
+    {
+      "type": "repository",
+      "revision": "…",
+      "value": {
+        "name": "…",
+        "title": { "pl-pl": "…" },
+        "owners": [ { "type": "user", "email": "owner@example.com" } ],
+        "editors": []
+      }
+    },
+    {
+      "type": "folder",
+      // omitted for the repository's root/albums/media singletons — nothing addresses them by id
+      "id": "folder-uuid",
+      "revision": "folder-revision-uuid",
+      // { "path": "/albums" } when the *parent's* type is root/albums/media, else { "id": "<uuid>" }
+      "parent": { "path": "/albums" },
+      "name": "narty",
+      // folders.data_content (kind renamed to type) plus the folder's full localized title, verbatim
+      "data": { "type": "album", "title": { "en-us": "Skiing", "pl-pl": "Narty" } },
+      "texts": { "en-us": "…" },
+      "permissions": [ /* same record shape as GET .../permissions */ ],
+      "media": [ /* same record shape as GET .../media */ ]
+    },
+    { "type": "media-item", "id": "media-item-uuid", "value": { "type": "image", "visibility": "normal", "originalHash": "…" } }
+  ]
+}
+```
+
+Records are returned in a fixed order — the repository record, then folders in path order (parents before children),
+then media items — and `offset`/`limit` page over exactly that flat list.
+
+#### Responses
+
+- `200 OK` — snapshot is `Ready`; body as above
+- `204 No Content` — snapshot is still `Building`
+- `403 Forbidden` — caller is not an owner or editor of the repository
+- `404 Not Found` — no such snapshot in this repository
+- `410 Gone` — snapshot build failed (`urn:bootstrap:error:metadata-snapshot-failed`); the `detail` field carries the
+  build error. Request a new snapshot instead of retrying this one — a snapshot is cheap to discard and rebuild.
+
+---
+
+### Repository Metadata Sync
+
+A single atomic mutation endpoint: submit a whole write-batch plan (folder creates, moves, renames, data/text/
+permissions/media changes, deletes, plus a repository-level rename/retitle) and have it applied in one database
+transaction or not at all. See `docs/metadata_sync_plan.md` for the full design; this section documents the resulting
+endpoint.
+
+#### POST /repos/{repoId}/metadata-sync
+
+```text
+POST /repos/{repoId}/metadata-sync
+Content-Type: application/json
+If-Match: "repository-metadata:42"
+Idempotency-Key: 0be4aa18-ee30-4f99-9025-f5f19368bb30
+
+{
+  "meta": { "formatVersion": 1 },
+  "operations": [ /* see "Operation vocabulary" below */ ]
+}
+```
+
+- `If-Match` is **required**, always exactly `"repository-metadata:<repositoryVersion>"` — the same `repositoryVersion`
+  the metadata-snapshot endpoint's `meta.repositoryVersion` reports (`None` treated as version `0`). A missing or
+  unparseable header is `400`; a value that doesn't match the repository's current version is
+  `409 repository_version_changed`.
+- `Idempotency-Key` is **required**: a client-generated UUID identifying this exact logical attempt. Retrying with the
+  same key and the same body replays the stored response instead of re-applying the plan; retrying with the same key
+  and a *different* body is rejected.
+- `meta.formatVersion` is currently always `1`.
+
+##### Operation vocabulary
+
+Each entry in `operations` is a JSON object with a top-level `"op"` discriminator:
+
+| `op` | Fields | Mirrors |
+| --- | --- | --- |
+| `repository.update` | `expectedRevision`, plus `name`/`title`/`owners`/`editors` (same shape as `POST /repos/{repoId}`) | `POST /repos/{repoId}` |
+| `folder.create` | `id` (**required** here, unlike the single-resource endpoint), `parent`, `name`, `title`, `type`, `data` (same shape as `POST /folders/{repoId}`) | `POST /folders/{repoId}` |
+| `folder.update` | `folder`, `expectedRevision`, `changes: { name?, parent?, title?, data?, texts?, permissions?, media? }` | `POST /folders/{repoId}/{folderIdOrPath}` + its `text`/`permissions`/`media` subresources |
+| `folder.delete` | `folder`, `expectedRevision` | `DELETE /folders/{repoId}/{folderIdOrPath}` |
+
+`folder.update`'s `changes.name`/`.parent`/`.title`/`.data` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
+own update fields; `changes.permissions` is the same patch array `PATCH .../permissions` accepts (a `permissions`
+change additionally requires the caller to hold the repository's **owner** role, matching that endpoint); `changes.media`
+is the same patch array `PATCH .../media` accepts. `changes.texts` is `{ "put": { "<lang>": "<markdown>" }, "delete":
+["<lang>", ...] }` — `put` stores/replaces the body for each named language (merged into the folder's existing
+translations, like `PUT .../text`); `delete` removes a stored language entirely (no single-resource equivalent exists
+for this).
+
+```json5
+{ "op": "repository.update", "expectedRevision": "old-repository-revision-uuid", "name": "piotrek", "title": "Piotrek" }
+{ "op": "folder.create", "id": "new-portable-folder-uuid", "parent": { "path": "/albums" }, "name": "2026", "title": "2026", "type": "album", "data": {} }
+{
+  "op": "folder.update",
+  "folder": "folder-uuid",
+  "expectedRevision": "old-folder-revision-uuid",
+  "changes": {
+    "title": "Skiing in 2026",
+    "texts": { "put": { "en-us": "New text" }, "delete": [] },
+    "permissions": [ { "principal": { "type": "user", "email": "a@example.com" }, "permission": "read", "effect": "grant" } ]
+  }
+}
+{ "op": "folder.delete", "folder": "folder-uuid", "expectedRevision": "old-folder-revision-uuid" }
+```
+
+A folder reference's `parent`/`folder` fields use the same `{"id": "<uuid>"}` / `{"path": "/albums/..."}` forms as
+every other folder JSON reference in this API — `{"id": ...}` may also name another `folder.create` operation's own
+`id` from the *same* plan, letting a plan create a nested folder structure in one request. Operations do not need to
+be listed in dependency order — the server topologically sorts `folder.create`/parent-changing `folder.update`
+operations before applying them.
+
+##### Responses
+
+- `200 OK` — the whole plan applied.
+
+  ```text
+  ETag: "repository-metadata:43"
+
+  {
+    "meta": {
+      "operation": "0be4aa18-ee30-4f99-9025-f5f19368bb30",
+      "previousRepositoryVersion": 42,
+      "repositoryVersion": 43
+    },
+    "data": {
+      "revisions": {
+        "repository": "new-repository-revision-uuid",
+        "folder:9bd1c3d0-...": "new-folder-revision-uuid"
+      }
+    }
+  }
+  ```
+
+  `data.revisions` has one entry per resource the plan actually mutated (`"repository"` present only if a
+  `repository.update` op was included; one `"folder:<uuid>"` entry per folder touched by `folder.create` or
+  `folder.update` — not for `folder.delete`).
+- `400 Bad Request` — missing/unparseable `If-Match` or `Idempotency-Key`, or a body that fails to decode.
+- `403 Forbidden` — the caller lacks the permission a specific operation requires. Nothing in the plan is applied.
+- `404 Not Found` — repository not found, or an operation references a folder that does not exist.
+- `409 repository_version_changed` (`urn:bootstrap:error:revision-conflict`) — `If-Match` didn't match the current
+  `repositoryVersion`.
+- `409 resource_revision_changed` (`urn:bootstrap:error:revision-conflict`) — one or more operations'
+  `expectedRevision` didn't match; `detail` lists every conflicting key found (`"repository"` and/or
+  `"folder:<uuid>"`).
+- `409 idempotency-key-reused` (`urn:bootstrap:error:idempotency-key-reused`) — the same `Idempotency-Key` was already
+  used with a different request body, or another request with this exact key is currently in flight (the latter also
+  carries a `Retry-After` header).
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`) — plan validation failed: duplicate
+  `folder.create` ids, a missing `folder.create` `id`, a parent-reference cycle, a `folder.create` naming a
+  `folderType` that's a per-repository singleton (`root`/`albums`/`media`), a `folder.delete` target also referenced
+  as a parent elsewhere in the same plan, or more than the configured maximum number of operations. `detail` carries
+  the offending operation indexes.
 
 ---
 

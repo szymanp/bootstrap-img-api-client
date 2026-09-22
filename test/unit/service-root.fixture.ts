@@ -99,6 +99,26 @@ export const serviceRootFixture: ServiceRoot = {
       fields: ['repoId', 'folderIdOrPath', 'filename'],
     },
     'repos:create': { rel: 'repos:create', href: '/repos' },
+    'repos:changelog': {
+      rel: 'repos:changelog',
+      template: '/repos/{repoId}/changelog',
+      fields: ['repoId'],
+    },
+    'repos:metadata-snapshot-create': {
+      rel: 'repos:metadata-snapshot-create',
+      template: '/repos/{repoId}/metadata-snapshots',
+      fields: ['repoId'],
+    },
+    'repos:metadata-snapshot-read': {
+      rel: 'repos:metadata-snapshot-read',
+      template: '/repos/{repoId}/metadata-snapshots/{snapshotId}',
+      fields: ['repoId', 'snapshotId'],
+    },
+    'repos:metadata-sync': {
+      rel: 'repos:metadata-sync',
+      template: '/repos/{repoId}/metadata-sync',
+      fields: ['repoId'],
+    },
     'media:metadata': {
       rel: 'media:metadata',
       template: '/media/{repoId}/{folderIdOrPath}/{filename}/metadata',

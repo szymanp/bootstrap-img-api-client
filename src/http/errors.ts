@@ -33,6 +33,8 @@ export const ErrorType = {
   MediaItemAlreadyExists: 'urn:bootstrap:error:media-item-already-exists',
   RevisionConflict: 'urn:bootstrap:error:revision-conflict',
   UnsupportedMediaType: 'urn:bootstrap:error:unsupported-media-type',
+  MetadataSnapshotFailed: 'urn:bootstrap:error:metadata-snapshot-failed',
+  IdempotencyKeyReused: 'urn:bootstrap:error:idempotency-key-reused',
   InternalError: 'urn:bootstrap:error:internal-error',
 } as const;
 
