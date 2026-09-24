@@ -52,8 +52,7 @@ export interface RepositorySnapshotRecord {
 /** A folder record in a `Ready` snapshot. */
 export interface FolderSnapshotRecord {
   type: 'folder';
-  /** Omitted for the repository's root/albums/media singletons — nothing addresses them by id. */
-  id?: string;
+  id: string;
   revision: string;
   /** `{ path: "/albums" }` when the *parent's* type is root/albums/media, else `{ id: "<uuid>" }`. */
   parent?: FolderReference;

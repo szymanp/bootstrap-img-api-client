@@ -54,6 +54,7 @@ The machine-readable `type` is the stable discriminator. Known values:
 | `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409 |
 | `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
 | `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
+| `urn:bootstrap:error:repository-would-have-no-owners` | 422 |
 | `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` / `:folder-already-exists` | 404 / 409 |
 | `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
 | `urn:bootstrap:error:revision-conflict` | 409 |
@@ -365,22 +366,43 @@ This request accepts the same additional query parameters as `GET /repos/{repoId
 
 ### POST /repos/{repoId}
 
-Updates a repository. All data fields are optional (partial update). `meta.revision` is required.
+Updates a repository. All data fields are optional (partial update). `meta.revision` is required. Requires the
+caller to hold the repository's **owner** role (`RepositoryPermission.Manage`) — this applies to the whole request,
+not just to `owners`/`editors` changes.
 
 #### Request body
 
 ```json
 {
   "meta": { "revision": "<current-revision>" },
-  "data": { "name": "new-name", "title": "New Title" }
+  "data": {
+    "name": "new-name",
+    "title": "New Title",
+    "owners": [ { "type": "user", "email": "owner@example.com" } ],
+    "editors": [ { "type": "user", "email": "editor@example.com" } ]
+  }
 }
 ```
+
+All fields under `data` are optional:
+
+- `name` — renames the repository.
+- `title` — as in `POST /repos` (bare string stores under `Content-Language`, merging with existing translations;
+  an object replaces every stored translation).
+- `owners` / `editors` — each, when present, **wholesale-replaces** the current set of principals holding that role:
+  principals missing from the list are removed, listed principals not currently holding the role are added.
+  Principal shape is the same `{ "type": "user"/"anonymous"/"link", ... }` form used by
+  `PATCH .../permissions`. Omitting the field leaves that role's assignments untouched. `"owners": []` is rejected
+  outright (`422`, `urn:bootstrap:error:repository-would-have-no-owners`) — a repository must always retain at
+  least one owner; the request is refused before anything is written, so `editors`/`name`/`title` changes in the
+  same request are not applied either. `"editors": []` has no such restriction and simply clears all editors.
 
 #### Responses
 
 - `200 OK` — returns an updated repository resource
 - `404 Not Found`
 - `409 Conflict` — revision mismatch or name already taken
+- `422 Unprocessable Entity` — `owners` supplied as an empty list
 
 ---
 
@@ -522,7 +544,7 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
     },
     {
       "type": "folder",
-      // omitted for the repository's root/albums/media singletons — nothing addresses them by id
+      // always present
       "id": "folder-uuid",
       "revision": "folder-revision-uuid",
       // { "path": "/albums" } when the *parent's* type is root/albums/media, else { "id": "<uuid>" }
@@ -665,6 +687,8 @@ operations before applying them.
   `folderType` that's a per-repository singleton (`root`/`albums`/`media`), a `folder.delete` target also referenced
   as a parent elsewhere in the same plan, or more than the configured maximum number of operations. `detail` carries
   the offending operation indexes.
+- `422 Unprocessable Entity` (`urn:bootstrap:error:repository-would-have-no-owners`) — a `repository.update` op
+  supplied `owners: []`; nothing in the plan is applied.
 
 ---
 

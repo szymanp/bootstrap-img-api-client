@@ -99,7 +99,11 @@ export interface IRepositoriesApi {
 
   /**
    * Partially update a repository. `revision` is the current `meta.revision`
-   * (optimistic concurrency); a mismatch yields a 409 `ApiError`.
+   * (optimistic concurrency); a mismatch yields a 409 `ApiError`. Requires the
+   * repository's owner role for any change, not just `owners`/`editors`.
+   * `owners`/`editors`, when given, wholesale-replace that role's principals;
+   * `owners: []` is rejected with a 422 `ApiError`
+   * (`ErrorType.RepositoryWouldHaveNoOwners`) and nothing is applied.
    *
    * @param repoId The repository's id.
    * @param revision The repository's current `meta.revision`.

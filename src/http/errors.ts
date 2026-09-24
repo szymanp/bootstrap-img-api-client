@@ -27,6 +27,7 @@ export const ErrorType = {
   TokenExpired: 'urn:bootstrap:error:token-expired',
   RepositoryNotFound: 'urn:bootstrap:error:repository-not-found',
   RepositoryNameConflict: 'urn:bootstrap:error:repository-name-conflict',
+  RepositoryWouldHaveNoOwners: 'urn:bootstrap:error:repository-would-have-no-owners',
   FolderNotFound: 'urn:bootstrap:error:folder-not-found',
   ParentFolderNotFound: 'urn:bootstrap:error:parent-folder-not-found',
   MediaItemNotFound: 'urn:bootstrap:error:media-item-not-found',

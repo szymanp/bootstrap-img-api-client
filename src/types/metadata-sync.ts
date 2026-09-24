@@ -22,7 +22,9 @@ export interface RepositoryUpdateOperation {
   expectedRevision: string;
   name?: string;
   title?: Localized;
+  /** Wholesale-replaces the owners; `[]` fails the whole plan with `422` (`ErrorType.RepositoryWouldHaveNoOwners`). */
   owners?: Principal[];
+  /** Wholesale-replaces the editors; `[]` clears them. */
   editors?: Principal[];
 }
 
