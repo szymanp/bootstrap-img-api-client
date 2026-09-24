@@ -21,6 +21,7 @@ export interface RepositoryUpdateOperation {
   /** The repository's current revision. */
   expectedRevision: string;
   name?: string;
+  /** A bare string is stored under the sync request's `Content-Language` (or the server default). */
   title?: Localized;
   /** Wholesale-replaces the owners; `[]` fails the whole plan with `422` (`ErrorType.RepositoryWouldHaveNoOwners`). */
   owners?: Principal[];
@@ -33,11 +34,26 @@ export interface FolderCreateOperation {
   op: 'folder.create';
   /** Required here, unlike `POST /folders/{repoId}` — lets other operations in the same plan reference it. */
   id: string;
+  /**
+   * `{ id }` may name another `folder.create` in the same plan. A `{ path }`
+   * is resolved against the repository as it was *before* the plan, so it
+   * cannot name a folder the plan creates.
+   */
   parent: FolderReference;
   name: string;
-  title: string;
+  /**
+   * A bare string is stored under the sync request's `Content-Language` (or
+   * the server default); an object sets specific languages (`{}` allowed).
+   */
+  title: Localized;
   type: FolderType;
   data?: Record<string, unknown>;
+  /** Markdown body per language, as a snapshot folder record's `texts`. */
+  texts?: Record<LanguageTag, string>;
+  /** Same patch array as `PATCH .../permissions`; requires the repository owner role. */
+  permissions?: PermissionRecord[];
+  /** Same patch array as `PATCH .../media`, applied in array order. */
+  media?: MediaMembershipPatch[];
 }
 
 /**
@@ -46,7 +62,12 @@ export interface FolderCreateOperation {
  */
 export interface FolderUpdateOperation {
   op: 'folder.update';
-  folder: FolderReference;
+  /**
+   * Bare folder UUID (not a `{ id }`/`{ path }` reference). At most one
+   * `folder.update`/`folder.delete` per folder per plan, and never a folder
+   * created in the same plan.
+   */
+  folder: string;
   expectedRevision: string;
   changes: FolderUpdateChanges;
 }
@@ -54,7 +75,8 @@ export interface FolderUpdateOperation {
 /** `folder.delete` — mirrors `DELETE /folders/{repoId}/{folderIdOrPath}`. */
 export interface FolderDeleteOperation {
   op: 'folder.delete';
-  folder: FolderReference;
+  /** Bare folder UUID (not a `{ id }`/`{ path }` reference). Deletes the whole subtree. */
+  folder: string;
   expectedRevision: string;
 }
 
@@ -72,8 +94,11 @@ export interface MetadataSyncTextChanges {
 /** The fields a `folder.update` operation actually modifies. */
 export interface FolderUpdateChanges {
   name?: string;
+  /** Same forms and resolution rules as {@link FolderCreateOperation.parent}. */
   parent?: FolderReference;
+  /** A bare string merges under the sync request's `Content-Language`; an object replaces all translations. */
   title?: Localized;
+  /** Replaces typed content wholesale; strip a snapshot's added `type`/`title` keys first. */
   data?: Record<string, unknown>;
   texts?: MetadataSyncTextChanges;
   /**

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, BootstrapClient, ErrorType, isApiError, MemoryCookieStore } from '../../src/index';
+import {
+  ApiError,
+  BootstrapClient,
+  ErrorType,
+  isApiError,
+  MemoryCookieStore,
+  type RevisionConflictProblem,
+  type ValidationFailedProblem,
+} from '../../src/index';
 import { MockFetch } from './mock-fetch';
 import { serviceRootFixture } from './service-root.fixture';
 
@@ -359,6 +367,70 @@ describe('repositories', () => {
       .applyMetadataSync('id1', 42, 'dup-key', { operations: [] })
       .catch((e) => e);
     expect(isApiError(err, ErrorType.IdempotencyKeyReused)).toBe(true);
+  });
+
+  it('sends folder.create content fields and bare-UUID folder.update/delete targets', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { operation: 'k', previousRepositoryVersion: 1, repositoryVersion: 2 }, data: { revisions: {} } },
+    });
+    const client = makeClient(mock);
+
+    const operations = [
+      {
+        op: 'folder.create' as const,
+        id: 'new-uuid',
+        parent: { path: '/albums' },
+        name: '2026',
+        title: { 'en-us': '2026', 'pl-pl': '2026' },
+        type: 'album' as const,
+        data: {},
+        texts: { 'en-us': 'Photos from 2026' },
+        permissions: [{ principal: { type: 'anonymous' as const }, permission: 'view' as const, effect: 'grant' as const }],
+        media: [{ op: 'add' as const, id: 'media-uuid', filename: 'first.jpg' }],
+      },
+      { op: 'folder.update' as const, folder: 'folder-uuid', expectedRevision: 'r1', changes: { name: 'x' } },
+      { op: 'folder.delete' as const, folder: 'other-uuid', expectedRevision: 'r2' },
+    ];
+    await client.repos.applyMetadataSync('id1', 1, 'k', { operations });
+
+    expect(JSON.parse(mock.last.body!)).toEqual({ meta: { formatVersion: 1 }, operations });
+  });
+
+  it('exposes metadata-sync problem extension members', async () => {
+    const mock = new MockFetch()
+      .enqueue({
+        status: 409,
+        headers: { 'content-type': 'application/problem+json' },
+        body: JSON.stringify({
+          type: ErrorType.RevisionConflict,
+          status: 409,
+          title: 'Resource Revision Conflict',
+          reason: 'resource-revision-changed',
+          conflicts: ['folder:f1'],
+        }),
+      })
+      .enqueue({
+        status: 422,
+        headers: { 'content-type': 'application/problem+json' },
+        body: JSON.stringify({
+          type: ErrorType.ValidationFailed,
+          status: 422,
+          detail: 'operations[1,3]: duplicate folder.create body.id',
+          errors: [{ operations: [1, 3], message: 'operations[1,3]: duplicate folder.create body.id' }],
+        }),
+      });
+    const client = makeClient(mock);
+
+    const conflict = await client.repos.applyMetadataSync('id1', 1, 'k1', { operations: [] }).catch((e) => e);
+    expect(isApiError(conflict, ErrorType.RevisionConflict)).toBe(true);
+    const cp = (conflict as ApiError).problem as RevisionConflictProblem;
+    expect(cp.reason).toBe('resource-revision-changed');
+    expect(cp.conflicts).toEqual(['folder:f1']);
+
+    const invalid = await client.repos.applyMetadataSync('id1', 1, 'k2', { operations: [] }).catch((e) => e);
+    expect(isApiError(invalid, ErrorType.ValidationFailed)).toBe(true);
+    expect(((invalid as ApiError).problem as ValidationFailedProblem).errors?.[0]?.operations).toEqual([1, 3]);
   });
 });
 

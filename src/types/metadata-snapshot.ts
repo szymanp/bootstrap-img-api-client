@@ -1,6 +1,6 @@
 import type { Localized, Principal } from './common';
 import type { Resource } from './envelope';
-import type { FolderReference, FolderType, MediaMembership, PermissionRecord } from './folders';
+import type { EffectivePermission, FolderReference, FolderType, MediaMembership } from './folders';
 import type { MediaType, MediaVisibility } from './media';
 
 /** A named group of fields a metadata snapshot can include. */
@@ -57,11 +57,18 @@ export interface FolderSnapshotRecord {
   /** `{ path: "/albums" }` when the *parent's* type is root/albums/media, else `{ id: "<uuid>" }`. */
   parent?: FolderReference;
   name: string;
-  /** `folders.data_content` (`kind` renamed to `type`) plus the folder's full localized title, verbatim. */
+  /**
+   * `folders.data_content` (`kind` renamed to `type`) plus the folder's full
+   * localized title, verbatim. To round-trip through `folder.create`/
+   * `folder.update`, remove `type` and `title` and send the rest as `data`.
+   */
   data: Record<string, unknown> & { type: FolderType; title: Localized };
   texts?: Record<string, string>;
-  /** Same record shape as `GET .../permissions`. */
-  permissions: Resource<PermissionRecord>[];
+  /**
+   * Effective (direct + inherited) grants, same records as `GET .../permissions`.
+   * The folder's own grants are those whose `data.folder` equals {@link id}.
+   */
+  permissions: Resource<EffectivePermission>[];
   /** Same record shape as `GET .../media`. */
   media: MediaMembership[];
 }

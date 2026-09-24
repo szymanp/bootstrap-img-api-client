@@ -30,6 +30,8 @@ export const ErrorType = {
   RepositoryWouldHaveNoOwners: 'urn:bootstrap:error:repository-would-have-no-owners',
   FolderNotFound: 'urn:bootstrap:error:folder-not-found',
   ParentFolderNotFound: 'urn:bootstrap:error:parent-folder-not-found',
+  FolderAlreadyExists: 'urn:bootstrap:error:folder-already-exists',
+  FolderPathConflict: 'urn:bootstrap:error:folder-path-conflict',
   MediaItemNotFound: 'urn:bootstrap:error:media-item-not-found',
   MediaItemAlreadyExists: 'urn:bootstrap:error:media-item-already-exists',
   RevisionConflict: 'urn:bootstrap:error:revision-conflict',
@@ -40,6 +42,50 @@ export const ErrorType = {
 } as const;
 
 export type KnownErrorType = (typeof ErrorType)[keyof typeof ErrorType];
+
+/**
+ * `ErrorType.RevisionConflict` as returned by `POST /repos/{repoId}/metadata-sync`;
+ * `reason` tells the two cases apart.
+ */
+export interface RevisionConflictProblem extends ProblemDetails {
+  /**
+   * - `repository-version-changed` — `If-Match` didn't match the current
+   *   repository version (see `expectedRepositoryVersion`/`currentRepositoryVersion`).
+   * - `resource-revision-changed` — one or more operations' `expectedRevision`
+   *   didn't match (see `conflicts`).
+   */
+  reason?: 'repository-version-changed' | 'resource-revision-changed';
+  expectedRepositoryVersion?: number;
+  currentRepositoryVersion?: number;
+  /** Every conflicting key: `"repository"` and/or `"folder:<uuid>"`. */
+  conflicts?: string[];
+}
+
+/**
+ * `ErrorType.IdempotencyKeyReused`; `reason` tells the two cases apart.
+ * - `request-mismatch` — the key was already used with a different body; don't
+ *   retry with this key.
+ * - `in-progress` — a request with this key is still being processed; retry the
+ *   identical request after the `Retry-After` delay (on `ApiError.response`).
+ */
+export interface IdempotencyKeyReusedProblem extends ProblemDetails {
+  reason?: 'request-mismatch' | 'in-progress';
+}
+
+/** One plan-validation issue in a {@link ValidationFailedProblem}. */
+export interface ValidationIssue {
+  /** Zero-based indexes of the `operations` concerned; empty for plan-wide issues. */
+  operations: number[];
+  message: string;
+}
+
+/**
+ * `ErrorType.ValidationFailed`. `errors` is present when a metadata-sync plan
+ * is structurally invalid.
+ */
+export interface ValidationFailedProblem extends ProblemDetails {
+  errors?: ValidationIssue[];
+}
 
 /** Error thrown for any non-2xx (and non-304) HTTP response. */
 export class ApiError extends Error {

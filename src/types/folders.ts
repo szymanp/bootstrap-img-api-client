@@ -41,7 +41,11 @@ export interface CreateFolderInput {
   id?: string;
   parent: FolderReference;
   name: string;
-  title: string;
+  /**
+   * A bare string is stored under `Content-Language`; an object carries every
+   * translation at once (`{}` creates a folder with no title).
+   */
+  title: Localized;
   type: FolderType;
   /** Optional typed content; defaults to `{}` when omitted. */
   data?: Record<string, unknown>;
@@ -53,15 +57,39 @@ export interface UpdateFolderInput {
   parent?: FolderReference;
   /** Bare string merges under Content-Language; object replaces all translations. */
   title?: Localized;
-  /** Replaces typed content wholesale; omit to leave unchanged. */
+  /**
+   * Replaces typed content wholesale (no key-level merge), including the
+   * reserved `text` key; omit to leave unchanged. Every key is stored as
+   * given, so strip the `type`/`title` keys a metadata snapshot adds.
+   */
   data?: Record<string, unknown>;
 }
 
-/** A single permission record. */
+/** A permission change sent to `PATCH .../permissions`. */
 export interface PermissionRecord {
   principal: Principal;
   permission: Permission;
+  /**
+   * `grant` adds the permission on this folder (a no-op if already granted
+   * here); `default` removes the grant stored on this folder, if any (a grant
+   * inherited from an ancestor still applies).
+   */
   effect: Effect;
+}
+
+/**
+ * An effective grant as returned by `GET .../permissions` (and in metadata
+ * snapshots): one per (principal, permission) pair, taken from the nearest
+ * folder that grants it.
+ */
+export interface EffectivePermission {
+  principal: Principal;
+  /**
+   * The folder the grant is stored on — the folder itself for a direct grant,
+   * an ancestor for an inherited one.
+   */
+  folder: string;
+  permission: Permission;
 }
 
 /** A direct media-item membership entry on a folder. */

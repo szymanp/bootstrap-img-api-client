@@ -180,12 +180,23 @@ export interface IRepositoriesApi {
    *
    * `repositoryVersion` must be the `repositoryVersion` reported by a prior
    * {@link getMetadataSnapshot} call's `meta.repositoryVersion` (or `0` if
-   * none); a stale value yields a `409` `ApiError` of type
-   * `ErrorType.RevisionConflict`. `idempotencyKey` should be a
-   * client-generated UUID identifying this exact logical attempt — retrying
-   * with the same key and the same plan replays the stored response;
-   * retrying with the same key and a different plan is rejected (`409`
-   * `ErrorType.IdempotencyKeyReused`).
+   * none). `idempotencyKey` should be a client-generated UUID identifying
+   * this exact logical attempt: retrying with the same key and the same plan
+   * (serialized identically — key order matters) replays the stored
+   * response, including any `4xx`, for 24 hours.
+   *
+   * Any error means nothing was applied. Notable failures (branch on the
+   * problem's extension members, see `RevisionConflictProblem` etc.):
+   * - `409` `ErrorType.RevisionConflict` — `reason` is
+   *   `repository-version-changed` (stale `repositoryVersion`) or
+   *   `resource-revision-changed` (`conflicts` lists the stale keys).
+   * - `409` `ErrorType.IdempotencyKeyReused` — `reason` is `request-mismatch`
+   *   (different plan under this key) or `in-progress` (retry after
+   *   `Retry-After`).
+   * - `409` `ErrorType.FolderPathConflict` — the final state would put two
+   *   folders at the same path.
+   * - `422` `ErrorType.ValidationFailed` — structurally invalid plan;
+   *   `errors` lists each issue with its operation indexes.
    *
    * @param repoId The repository's id.
    * @param repositoryVersion The repository's current metadata version

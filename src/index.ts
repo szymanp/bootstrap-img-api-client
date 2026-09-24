@@ -49,8 +49,12 @@ export {
   ErrorType,
   isApiError,
   problemFromResponse,
+  type IdempotencyKeyReusedProblem,
   type KnownErrorType,
   type ProblemDetails,
+  type RevisionConflictProblem,
+  type ValidationFailedProblem,
+  type ValidationIssue,
 } from './http/errors';
 
 // Credential stores.
@@ -107,6 +111,7 @@ export type {
 } from './types/metadata-sync';
 export type {
   CreateFolderInput,
+  EffectivePermission,
   Folder,
   FolderReference,
   FolderRelated,

@@ -205,7 +205,7 @@ export class FoldersApi implements IFoldersApi {
     });
   }
 
-  /** List all permissions on a folder. */
+  /** List the folder's effective (direct + inherited) permissions. */
   async getPermissions(
     ref: FolderRefInput,
     options: Pick<ReadOptions, 'acceptLanguage'> = {},

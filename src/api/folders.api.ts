@@ -3,6 +3,7 @@ import type { ReadOptions, WriteLanguageOptions } from '../types/common';
 import type { Collection, PageQuery, Resource } from '../types/envelope';
 import type {
   CreateFolderInput,
+  EffectivePermission,
   Folder,
   FolderRelated,
   MediaMembership,
@@ -16,7 +17,7 @@ import type {
 import type { MediaMetadata } from '../types/media';
 
 export type FolderResource = Resource<Folder, FolderRelated>;
-export type PermissionsCollection = Collection<Resource<PermissionRecord>, { folder?: FolderResource[] }>;
+export type PermissionsCollection = Collection<Resource<EffectivePermission>, { folder?: FolderResource[] }>;
 /** Result of a media-membership query: membership records plus the full media-item resources. */
 export type MediaMembershipCollection = Collection<
   Resource<MediaMembership>,
@@ -142,7 +143,12 @@ export interface IFoldersApi {
    */
   getTextMedia(ref: FolderRefInput, options?: TextMediaOptions): Promise<TextMediaResult>;
 
-  /** List all permissions on a folder. */
+  /**
+   * List the folder's effective permissions: its own grants plus those
+   * inherited from ancestors. A record's `folder` names where the grant is
+   * stored, so the direct grants are those whose `folder` is this folder's id.
+   * Repository roles (owner/editor) are not included.
+   */
   getPermissions(ref: FolderRefInput, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<PermissionsCollection>;
 
   /** Add, remove, or modify folder permissions. */

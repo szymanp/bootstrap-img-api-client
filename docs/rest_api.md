@@ -44,7 +44,9 @@ Error bodies are `application/problem+json`:
 }
 ```
 
-The machine-readable `type` is the stable discriminator. Known values:
+The machine-readable `type` is the stable discriminator. Some problems add type-specific extension members (RFC 9457
+§3.2) as extra top-level fields, e.g. `reason`, `conflicts`, or `errors` on `POST /repos/{repoId}/metadata-sync`
+errors; clients should ignore members they don't recognize. Known `type` values:
 
 | `type` | Typical status |
 | --- | --- |
@@ -55,9 +57,10 @@ The machine-readable `type` is the stable discriminator. Known values:
 | `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
 | `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
 | `urn:bootstrap:error:repository-would-have-no-owners` | 422 |
-| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` / `:folder-already-exists` | 404 / 409 |
+| `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` / `:folder-already-exists` / `:folder-path-conflict` | 404 / 409 |
 | `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
 | `urn:bootstrap:error:revision-conflict` | 409 |
+| `urn:bootstrap:error:idempotency-key-reused` | 409 |
 | `urn:bootstrap:error:unsupported-media-type` | 415 |
 | `urn:bootstrap:error:metadata-snapshot-failed` | 410 |
 | `urn:bootstrap:error:internal-error` | 500 |
@@ -553,7 +556,10 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
       // folders.data_content (kind renamed to type) plus the folder's full localized title, verbatim
       "data": { "type": "album", "title": { "en-us": "Skiing", "pl-pl": "Narty" } },
       "texts": { "en-us": "…" },
-      "permissions": [ /* same record shape as GET .../permissions */ ],
+      // effective (direct + inherited) grants, same records as GET .../permissions — see below
+      "permissions": [
+        { "data": { "principal": { "type": "user", "email": "a@example.com" }, "folder": "folder-uuid", "permission": "read" } }
+      ],
       "media": [ /* same record shape as GET .../media */ ]
     },
     { "type": "media-item", "id": "media-item-uuid", "value": { "type": "image", "visibility": "normal", "originalHash": "…" } }
@@ -563,6 +569,16 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
 
 Records are returned in a fixed order — the repository record, then folders in path order (parents before children),
 then media items — and `offset`/`limit` page over exactly that flat list.
+
+Notes on folder records:
+
+- `data` is the folder's typed content with two additions: `type` (the folder type) and `title` (every stored
+  translation). Everything else in it, including the reserved `text` key (associated object data for markdown embeds),
+  is the client-authored content exactly as stored. To round-trip it through `folder.create`/`folder.update`, remove
+  `type` and `title` and send the rest as `data`; otherwise they are stored as ordinary content fields.
+- `permissions` lists **effective** grants, including those inherited from ancestors, in the same shape as
+  `GET .../permissions`: no `effect` field; `folder` names the folder the grant is stored on. A folder's own explicit
+  grants are exactly the records whose `data.folder` equals the record's `id`.
 
 #### Responses
 
@@ -598,11 +614,16 @@ Idempotency-Key: 0be4aa18-ee30-4f99-9025-f5f19368bb30
 
 - `If-Match` is **required**, always exactly `"repository-metadata:<repositoryVersion>"` — the same `repositoryVersion`
   the metadata-snapshot endpoint's `meta.repositoryVersion` reports (`None` treated as version `0`). A missing or
-  unparseable header is `400`; a value that doesn't match the repository's current version is
-  `409 repository_version_changed`.
+  unparseable header is `400`; a value that doesn't match the repository's current version is a `409` "Repository
+  Version Conflict" (see Responses).
 - `Idempotency-Key` is **required**: a client-generated UUID identifying this exact logical attempt. Retrying with the
   same key and the same body replays the stored response instead of re-applying the plan; retrying with the same key
-  and a *different* body is rejected.
+  and a *different* body is rejected. Bodies are compared after JSON parsing: whitespace differences don't matter,
+  but key order does, so serialize retries identically. Stored responses are kept for 24 hours
+  (`metadata_sync.idempotency_expiry_hours`).
+- A replayed response has the same status, `ETag`, and JSON content as the original, but **not necessarily the same
+  bytes**: the body is stored as PostgreSQL `jsonb`, which reorders object keys (e.g. `data` may come before `meta`).
+  Compare replayed responses as parsed JSON.
 - `meta.formatVersion` is currently always `1`.
 
 ##### Operation vocabulary
@@ -613,8 +634,21 @@ Each entry in `operations` is a JSON object with a top-level `"op"` discriminato
 | --- | --- | --- |
 | `repository.update` | `expectedRevision`, plus `name`/`title`/`owners`/`editors` (same shape as `POST /repos/{repoId}`) | `POST /repos/{repoId}` |
 | `folder.create` | `id` (**required** here, unlike the single-resource endpoint), `parent`, `name`, `title`, `type`, `data` (same shape as `POST /folders/{repoId}`) | `POST /folders/{repoId}` |
-| `folder.update` | `folder`, `expectedRevision`, `changes: { name?, parent?, title?, data?, texts?, permissions?, media? }` | `POST /folders/{repoId}/{folderIdOrPath}` + its `text`/`permissions`/`media` subresources |
-| `folder.delete` | `folder`, `expectedRevision` | `DELETE /folders/{repoId}/{folderIdOrPath}` |
+| `folder.update` | `folder` (bare UUID string), `expectedRevision`, `changes: { name?, parent?, title?, data?, texts?, permissions?, media? }` | `POST /folders/{repoId}/{folderIdOrPath}` + its `text`/`permissions`/`media` subresources |
+| `folder.delete` | `folder` (bare UUID string), `expectedRevision` | `DELETE /folders/{repoId}/{folderIdOrPath}` |
+
+`folder.create`'s `title` is a bare string or a `{ "<lang>": "…" }` object (`{}` allowed), as on
+`POST /folders/{repoId}`. A bare string — here and in `folder.update`/`repository.update` — is stored under the sync
+request's own `Content-Language` header (or the server default when absent); there is no per-operation language, so
+send an object to set specific languages.
+
+`folder.create` additionally accepts three optional fields that give the new folder its content in the same plan (a
+`folder.update` can't target a folder the same plan creates):
+
+- `texts` — `{ "<lang>": "<markdown>" }`, one body per language; the same shape as a snapshot folder record's `texts`.
+  References are extracted exactly as for `PUT .../text`.
+- `permissions` — the same patch array `PATCH .../permissions` accepts (requires the repository **owner** role).
+- `media` — the same patch array `PATCH .../media` accepts.
 
 `folder.update`'s `changes.name`/`.parent`/`.title`/`.data` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
 own update fields; `changes.permissions` is the same patch array `PATCH .../permissions` accepts (a `permissions`
@@ -626,7 +660,17 @@ for this).
 
 ```json5
 { "op": "repository.update", "expectedRevision": "old-repository-revision-uuid", "name": "piotrek", "title": "Piotrek" }
-{ "op": "folder.create", "id": "new-portable-folder-uuid", "parent": { "path": "/albums" }, "name": "2026", "title": "2026", "type": "album", "data": {} }
+{
+  "op": "folder.create",
+  "id": "new-portable-folder-uuid",
+  "parent": { "path": "/albums" },
+  "name": "2026",
+  "title": { "en-us": "2026", "pl-pl": "2026" },
+  "type": "album",
+  "data": {},
+  "texts": { "en-us": "Photos from 2026" },
+  "media": [ { "op": "add", "id": "media-item-uuid", "filename": "first.jpg" } ]
+}
 {
   "op": "folder.update",
   "folder": "folder-uuid",
@@ -640,11 +684,39 @@ for this).
 { "op": "folder.delete", "folder": "folder-uuid", "expectedRevision": "old-folder-revision-uuid" }
 ```
 
-A folder reference's `parent`/`folder` fields use the same `{"id": "<uuid>"}` / `{"path": "/albums/..."}` forms as
-every other folder JSON reference in this API — `{"id": ...}` may also name another `folder.create` operation's own
-`id` from the *same* plan, letting a plan create a nested folder structure in one request. Operations do not need to
-be listed in dependency order — the server topologically sorts `folder.create`/parent-changing `folder.update`
-operations before applying them.
+Folder addressing:
+
+- `folder` (in `folder.update`/`folder.delete`) is a **bare folder UUID string**, not a `{"id": …}`/`{"path": …}`
+  object; these operations cannot address a folder by path. Each folder may be the target of at most one
+  `folder.update`/`folder.delete` per plan, and never of a folder created in the same plan (both `422`).
+- `parent` (in `folder.create` and `changes.parent`) uses the same `{"id": "<uuid>"}` / `{"path": "/albums/..."}`
+  forms as every other folder JSON reference in this API. `{"id": ...}` may also name another `folder.create`
+  operation's `id` from the *same* plan, letting a plan create a nested folder structure in one request. A
+  `{"path": ...}` parent is resolved against the repository **as it was before the plan**: it names whichever folder
+  was at that path, even if the plan moves or renames that folder, and it cannot name a folder the plan creates (use
+  `{"id": ...}` for those).
+
+Execution order: operations do not need to be listed in dependency order. After locking every folder the plan touches
+and checking every `expectedRevision`, the server applies the plan in fixed phases, regardless of the order of
+`operations`:
+
+1. `repository.update`.
+2. Structure: every folder the plan creates, moves, or renames is first given a temporary internal name, then
+   `folder.create` and parent-changing `folder.update` operations run in topological order, so parents are created
+   or moved before their children.
+3. `folder.delete`, in list order. A delete removes the whole subtree. Deleting both a folder and one of its
+   descendants is allowed: both must exist and match their `expectedRevision` when the plan starts. A folder moved
+   out of a deleted folder (phase 2) survives the delete.
+4. Every folder from phase 2 takes its final name.
+5. Content, against the folders' final locations: each `folder.update`'s `title`/`data`, then `texts`, then
+   `permissions`, then `media` (applied strictly in array order, as in `PATCH .../media`); then each
+   `folder.create`'s `texts`, `permissions`, and `media`. Changes to a folder that a `folder.delete` in the same plan
+   removed (because it deleted an ancestor) are skipped.
+
+Only the **final** state must have unique folder paths. A plan may delete a folder and create another under the same
+name, move or rename a folder into a name another operation frees up, or swap two sibling names. A plan whose final
+state would put two folders at the same path is rejected with `409` (`urn:bootstrap:error:folder-path-conflict`). A
+plan is rejected with `422` if a `parent` reference names a folder that a `folder.delete` in the same plan targets.
 
 ##### Responses
 
@@ -673,22 +745,73 @@ operations before applying them.
   `folder.update` — not for `folder.delete`).
 - `400 Bad Request` — missing/unparseable `If-Match` or `Idempotency-Key`, or a body that fails to decode.
 - `403 Forbidden` — the caller lacks the permission a specific operation requires. Nothing in the plan is applied.
-- `404 Not Found` — repository not found, or an operation references a folder that does not exist.
-- `409 repository_version_changed` (`urn:bootstrap:error:revision-conflict`) — `If-Match` didn't match the current
-  `repositoryVersion`.
-- `409 resource_revision_changed` (`urn:bootstrap:error:revision-conflict`) — one or more operations'
-  `expectedRevision` didn't match; `detail` lists every conflicting key found (`"repository"` and/or
-  `"folder:<uuid>"`).
-- `409 idempotency-key-reused` (`urn:bootstrap:error:idempotency-key-reused`) — the same `Idempotency-Key` was already
-  used with a different request body, or another request with this exact key is currently in flight (the latter also
-  carries a `Retry-After` header).
-- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`) — plan validation failed: duplicate
+- `404 Not Found` (`urn:bootstrap:error:repository-not-found`) — repository not found.
+- `404 Not Found` (`urn:bootstrap:error:folder-not-found`) — an operation's `folder` or `parent` references a folder
+  that does not exist.
+- `404 Not Found` (`urn:bootstrap:error:media-item-not-found`) — a media `add` names a nonexistent media item, or a
+  media `move` names a filename that isn't linked in the folder.
+- `404 Not Found` (`urn:bootstrap:error:user-not-found`) — a permission patch names an email with no registered user.
+- `409 Conflict` (`urn:bootstrap:error:revision-conflict`) — two cases share this `type`; the `reason` extension member
+  tells them apart:
+  - `reason: "repository-version-changed"` (`title: "Repository Version Conflict"`) — `If-Match` didn't match the
+    current `repositoryVersion`. Also carries `expectedRepositoryVersion` and `currentRepositoryVersion`.
+  - `reason: "resource-revision-changed"` (`title: "Resource Revision Conflict"`) — one or more operations'
+    `expectedRevision` didn't match. `conflicts` lists every conflicting key (`"repository"` and/or
+    `"folder:<uuid>"`).
+
+  ```json
+  {
+    "type": "urn:bootstrap:error:revision-conflict",
+    "status": 409,
+    "title": "Resource Revision Conflict",
+    "detail": "Resource revision conflict: folder:9bd1c3d0-…",
+    "instance": null,
+    "reason": "resource-revision-changed",
+    "conflicts": ["folder:9bd1c3d0-…"]
+  }
+  ```
+
+- `409 Conflict` (`urn:bootstrap:error:idempotency-key-reused`) — again two cases, told apart by `reason`:
+  - `reason: "request-mismatch"`, no `Retry-After` — the key was already used with a different request body.
+    Don't retry with this key.
+  - `reason: "in-progress"`, `Retry-After: 1` — a request with this exact key is still being processed. Retry the
+    identical request with the same key after the delay.
+- `409 Conflict` (`urn:bootstrap:error:folder-path-conflict`) — the plan's final state would put two folders at the
+  same path; `detail` names the path.
+- `409 Conflict` (`urn:bootstrap:error:folder-already-exists`) — a `folder.create` `id` is already in use.
+- `409 Conflict` (`urn:bootstrap:error:media-item-already-exists`) — a media `add` would duplicate a filename in the
+  folder.
+- `409 Conflict` (`urn:bootstrap:error:repository-name-conflict`) — a `repository.update` renames the repository to a
+  name that is already taken.
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`) — the plan is structurally invalid: duplicate
   `folder.create` ids, a missing `folder.create` `id`, a parent-reference cycle, a `folder.create` naming a
   `folderType` that's a per-repository singleton (`root`/`albums`/`media`), a `folder.delete` target also referenced
-  as a parent elsewhere in the same plan, or more than the configured maximum number of operations. `detail` carries
-  the offending operation indexes.
+  as a parent elsewhere in the same plan, a `folder.update`/`folder.delete` of a folder created in the same plan, a
+  folder targeted by more than one `folder.update`/`folder.delete`, or more than the configured maximum number of
+  operations. The `errors` extension member lists every issue found, each with the zero-based indexes of the
+  `operations` it concerns (empty for plan-wide issues such as the operation limit); `detail` joins the same
+  messages with semicolons.
+
+  ```json
+  {
+    "type": "urn:bootstrap:error:validation-failed",
+    "status": 422,
+    "title": "Bad Request",
+    "detail": "operations[1,3]: duplicate folder.create body.id",
+    "instance": null,
+    "errors": [ { "operations": [1, 3], "message": "operations[1,3]: duplicate folder.create body.id" } ]
+  }
+  ```
+
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, no `errors` member) — a media `move` whose
+  `afterFilename` equals its `filename`.
 - `422 Unprocessable Entity` (`urn:bootstrap:error:repository-would-have-no-owners`) — a `repository.update` op
-  supplied `owners: []`; nothing in the plan is applied.
+  supplied `owners: []`.
+
+Every error response means nothing in the plan was applied. Every `4xx` outcome is recorded under the
+`Idempotency-Key` and replayed on retry (with the same status and body), like a `200`. A `500` is not recorded: the
+key stays reserved for about 10 minutes (`metadata_sync.idempotency_stale_after_minutes`), during which a retry gets
+`409` with `reason: "in-progress"`, and is then released so a retry attempts the plan again.
 
 ---
 
@@ -712,7 +835,7 @@ Single-folder responses include `related.ancestors` — an ordered list of ances
 
 Folder `data` carries a `textPreview` field (first 250 characters of the localized markdown body) when text content exists for the resolved language. Use the dedicated text subresource below to read the full body or write a new translation.
 
-Folder `data` also carries a `data` field — an arbitrary JSON object holding the folder's typed content (kind-specific properties). The shape depends on the folder's `type`; for example an `album` folder may expose `{"title": "Cover Title"}`. Unknown fields in this object are preserved round-trip. The internal `kind` discriminator is omitted from responses since it is already conveyed by `type`. A reserved `text` key, present on any folder type, carries the folder's associated object data for markdown embeds (e.g. a `::gallery` directive's definition) — see [folder_text.md](folder_text.md#associated-object-data). It is always wholesale-replaced along with the rest of `data`, like every other part of this field.
+Folder `data` also carries a `data` field — an arbitrary JSON object holding the folder's typed content (kind-specific properties). The shape depends on the folder's `type`; for example an `album` folder may expose `{"title": "Cover Title"}`. Unknown fields in this object are preserved round-trip. The internal `kind` discriminator is omitted from responses since it is already conveyed by `type`. A reserved `text` key, present on any folder type, carries the folder's associated object data for markdown embeds (e.g. a `::gallery` directive's definition) — see [folder_text.md](folder_text.md#associated-object-data). It is client-authored content, not derived by the server from the markdown body (the server only derives its reference index from it), and it is always wholesale-replaced along with the rest of `data`, like every other part of this field.
 
 Folder `links` includes a `text` link pointing at the text subresource. When any text has been stored, the link advertises the available languages, e.g.
 
@@ -740,6 +863,9 @@ Creates a folder under an existing parent. `Content-Language` is required.
 ```
 
 Valid folder types: `root`, `albums`, `album`, `document`, `tag`, `media`, `media-source`, `picture`.
+
+`title` is either a bare string, stored under the request's `Content-Language`, or a `{ "<lang>": "…" }` object
+carrying every translation at once. An empty object (`{}`) is accepted and creates a folder with no title.
 
 The inner `data` object is optional. When omitted, an empty default content object (`{}`) is stored. The content shape is determined by `type`; unknown fields are preserved.
 
@@ -798,7 +924,9 @@ All fields under `data` are optional:
 - `name` — renames the folder (updates all descendant paths).
 - `parent` — moves the folder under the referenced parent.
 - `title` — updates the folder's localized title. A bare string (e.g. `"Updated Title"`) is stored under the request's `Content-Language`, merging with any existing translations; an object (e.g. `{ "en": "Title", "pl": "Tytuł" }`) replaces **all** stored translations at once.
-- `data` — replaces the folder's typed content JSON wholesale; omitting it leaves the existing content unchanged.
+- `data` — replaces the folder's typed content JSON wholesale (no key-level merge), including the reserved `text`
+  key; omitting it leaves the existing content unchanged. Every key is stored as given, so do not echo back the
+  `type`/`title` keys a metadata snapshot adds to its folder `data` — they would be stored as ordinary content fields.
 
 #### Responses
 
@@ -996,7 +1124,9 @@ Requires `Accept-Language` to select the right language version of the text. Sup
 
 ### GET /folders/{repoId}/{folderVar}/permissions
 
-Lists all permissions on a folder.
+Lists the folder's **effective** permissions: explicit grants stored on the folder itself plus grants inherited from
+its ancestors. There is one record per (principal, permission) pair, taken from the nearest folder that grants it (the
+folder itself wins over an ancestor).
 
 #### Response body
 
@@ -1004,11 +1134,17 @@ Lists all permissions on a folder.
 {
   "meta": {},
   "records": [
-    { "data": { "principal": { "type": "user", "email": "user@example.com" }, "permission": "read", "effect": "grant" } }
+    { "data": { "principal": { "type": "user", "email": "user@example.com" }, "folder": "<folder-uuid>", "permission": "read" } }
   ],
   "related": { "folder": [ { "meta": …, "data": …, "links": … } ] }
 }
 ```
+
+- `folder` is the ID of the folder the grant is stored on — this folder for a direct grant, an ancestor for an
+  inherited one. The folder's direct grants are exactly the records whose `folder` equals the folder's own ID.
+- Records carry no `effect` field; every record is a grant. (`effect` exists only in `PATCH` requests.)
+- Repository roles (owner/editor) are not listed here.
+- A link principal is returned as `{ "type": "link", "id": "<principal-uuid>" }` and carries no secret.
 
 #### Responses
 
@@ -1030,7 +1166,8 @@ A **principal** is one of:
 | `{ "type": "link", "id": "<principal-uuid>" }` | A shared-link principal |
 
 Valid `permission` values: `view`, `read`, `write`, `publish`, `share`.
-Valid `effect` values: `grant` (add the permission) or `default` (reset to the inherited default, i.e. remove the explicit grant).
+Valid `effect` values: `grant` (add the permission on this folder; a no-op if it is already granted here) or
+`default` (remove the explicit grant stored on this folder, if any; a grant inherited from an ancestor still applies).
 
 #### Request body
 
@@ -1172,6 +1309,11 @@ Replaces the folder's direct media-item membership with exactly the supplied lis
 
 Applies an ordered list of patches to the folder's direct media-item membership in a single transaction. Returns the resulting membership.
 
+Patches are applied strictly in array order, each one seeing the result of the previous ones, so a `move` may name,
+in `afterFilename`, an entry added earlier in the same list, and a `remove` followed by an `add` may relink a filename
+to a different media item. Filenames are compared exactly (case-sensitive): `IMG.jpg` and `img.jpg` are different
+entries.
+
 Each patch is one of:
 
 | Form | Effect |
@@ -1195,7 +1337,8 @@ Each patch is one of:
 - `200 OK` — JSON array of the resulting membership (same shape as the GET response), in the folder's custom order
 - `400 Bad Request` — invalid patch op, malformed `remove`, or a `move` whose `afterFilename` equals `filename`
 - `403 Forbidden` — caller lacks write permission on the folder
-- `404 Not Found` — the folder, or (for a `move`) `filename`/`afterFilename` does not resolve to a link in the folder
+- `404 Not Found` — the folder, or (for an `add`) the media item, or (for a `move`) `filename`/`afterFilename` does not
+  resolve to a link in the folder
 - `409 Conflict` — an `add` would create a duplicate filename
 
 ---
