@@ -1,3 +1,12 @@
+import {
+  computePossessionProof,
+  formatPossessionProof,
+  formatReprDigest,
+  subtleCrypto,
+  type RereadableBody,
+  type Sha256Input,
+} from '../http/digest';
+import { ErrorType, isApiError, type PossessionProofRequiredProblem } from '../http/errors';
 import { fieldsParam } from '../http/language';
 import { parseJson, parseText, Transport } from '../http/transport';
 import type { LinksProvider, ServiceLinks } from '../links';
@@ -5,7 +14,15 @@ import type { FolderRefInput, MediaRef } from '../refs';
 import type { ReadOptions } from '../types/common';
 import { isHlsRenditionLink, isMediaItemVariantLink, type Collection, type HrefLink } from '../types/envelope';
 import type { BinaryBody, DownloadResult, MediaListQuery, UploadResult } from '../types/media';
-import type { DownloadOptions, HlsRendition, IMediaApi, MediaItemVariant, MediaResource } from './media.api';
+import type {
+  DownloadOptions,
+  HlsRendition,
+  IMediaApi,
+  MediaItemVariant,
+  MediaResource,
+  PossessionProof,
+  UploadByIdOptions,
+} from './media.api';
 
 /** Media-item endpoints, scoped to a single repository. */
 export class MediaApi implements IMediaApi {
@@ -90,15 +107,71 @@ export class MediaApi implements IMediaApi {
    * `image/*` or `video/*` type. The user must be a repository owner or editor.
    * Throws an {@link ApiError} with status `409` if an item already exists at
    * that id whose original blob differs from the uploaded binary. Returns the
-   * media-item id echoed by the server.
+   * media-item id echoed by the server, and whether the bytes were sent.
    */
-  async uploadById(mediaItemId: string, body: BinaryBody, contentType: string): Promise<UploadResult> {
+  async uploadById(
+    mediaItemId: string,
+    body: BinaryBody,
+    contentType: string,
+    options: UploadByIdOptions = {},
+  ): Promise<UploadResult> {
+    const { sha256, claim } = options;
+    if (claim) {
+      if (sha256 === undefined) throw new TypeError('uploadById: `claim` requires `sha256`.');
+      if (body instanceof ReadableStream) {
+        throw new TypeError('uploadById: `claim` needs a re-readable body, not a ReadableStream.');
+      }
+      if (subtleCrypto()) {
+        const claimed = await this.tryClaim(mediaItemId, sha256, body);
+        if (claimed) return claimed;
+      }
+    }
     return this.transport.request({
       method: 'PUT',
       path: (await this.links()).uploadMediaById(this.repoId, mediaItemId).href,
+      headers: { 'repr-digest': sha256 === undefined ? undefined : formatReprDigest(sha256) },
       body: { kind: 'binary', value: body, contentType },
-      parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? '' }),
+      parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? '', transferred: true }),
     });
+  }
+
+  /** Low-level upload claim: empty-body `PUT` with `Repr-Digest` and an optional proof. */
+  async claimById(mediaItemId: string, sha256: Sha256Input, proof?: PossessionProof): Promise<UploadResult> {
+    return this.transport.request({
+      method: 'PUT',
+      path: (await this.links()).uploadMediaById(this.repoId, mediaItemId).href,
+      headers: {
+        'repr-digest': formatReprDigest(sha256),
+        'possession-proof': proof && formatPossessionProof(proof.challenge, proof.response),
+      },
+      parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? mediaItemId, transferred: false }),
+    });
+  }
+
+  /**
+   * Run the claim → prove flow. Resolves `undefined` when the file has to be
+   * uploaded in full (claim not accepted, or proof rejected).
+   */
+  private async tryClaim(
+    mediaItemId: string,
+    sha256: Sha256Input,
+    body: RereadableBody,
+  ): Promise<UploadResult | undefined> {
+    let challenge: PossessionProofRequiredProblem;
+    try {
+      return await this.claimById(mediaItemId, sha256);
+    } catch (err) {
+      if (isApiError(err, ErrorType.UploadRequired)) return undefined;
+      if (!isApiError(err, ErrorType.PossessionProofRequired)) throw err;
+      challenge = err.problem as PossessionProofRequiredProblem;
+    }
+    const response = await computePossessionProof(body, challenge);
+    try {
+      return await this.claimById(mediaItemId, sha256, { challenge: challenge.challenge, response });
+    } catch (err) {
+      if (isApiError(err, ErrorType.PossessionProofInvalid)) return undefined;
+      throw err;
+    }
   }
 
   /**

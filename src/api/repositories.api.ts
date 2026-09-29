@@ -196,7 +196,10 @@ export interface IRepositoriesApi {
    * - `409` `ErrorType.FolderPathConflict` — the final state would put two
    *   folders at the same path.
    * - `422` `ErrorType.ValidationFailed` — structurally invalid plan;
-   *   `errors` lists each issue with its operation indexes.
+   *   `errors` lists each issue with its operation indexes. This includes a
+   *   `folder.create` or parent-changing `folder.update` that would place a
+   *   folder anywhere inside a subtree a `folder.delete` in the same plan
+   *   removes (not just directly under the deleted folder).
    *
    * @param repoId The repository's id.
    * @param repositoryVersion The repository's current metadata version

@@ -39,6 +39,8 @@ Layered, with a thin low-level transport under typed resource APIs:
   (revision id, `Media-Item-Id`, ETag, `Content-Language`) read them directly.
 - `src/http/errors.ts` — `ProblemDetails` (RFC 9457), `ApiError` (carries `status`,
   `problem`, `response`), the `ErrorType` discriminator map, and `isApiError(e, type?)`.
+- `src/http/digest.ts` — Web Crypto helpers for `Repr-Digest` (RFC 9530) and upload-claim
+  possession proofs (per-chunk SHA-256 + HMAC, reading only the challenged chunks).
 - `src/http/credentials.ts` — `CredentialStore` abstraction for cookie-session auth.
   `MemoryCookieStore` (Node) captures/replays the `session` cookie and is serializable;
   `BrowserCredentialStore` is a no-op that sets `credentials: 'include'`.

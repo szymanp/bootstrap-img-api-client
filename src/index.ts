@@ -36,6 +36,8 @@ export type {
   HlsRendition,
   MediaItemVariant,
   MediaResource,
+  PossessionProof,
+  UploadByIdOptions,
 } from './api/media.api';
 export type { IServiceRootApi, ServiceRoot } from './api/service-root.api';
 export { ServiceLinks } from './links';
@@ -51,11 +53,21 @@ export {
   problemFromResponse,
   type IdempotencyKeyReusedProblem,
   type KnownErrorType,
+  type PossessionProofRequiredProblem,
   type ProblemDetails,
   type RevisionConflictProblem,
   type ValidationFailedProblem,
   type ValidationIssue,
 } from './http/errors';
+
+// Digests & upload-claim proofs.
+export {
+  computePossessionProof,
+  formatPossessionProof,
+  formatReprDigest,
+  type RereadableBody,
+  type Sha256Input,
+} from './http/digest';
 
 // Credential stores.
 export {

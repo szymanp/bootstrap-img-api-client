@@ -101,6 +101,11 @@ export type BinaryBody = Blob | ArrayBuffer | ArrayBufferView | ReadableStream<U
 /** Result of a media upload. */
 export interface UploadResult {
   mediaItemId: string;
+  /**
+   * Set by `uploadById`: `false` when the item was created from an upload
+   * claim without sending the bytes, `true` when the file was uploaded in full.
+   */
+  transferred?: boolean;
 }
 
 /** A binary download (200) or a not-modified result (304). */

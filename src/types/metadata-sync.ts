@@ -75,7 +75,11 @@ export interface FolderUpdateOperation {
 /** `folder.delete` — mirrors `DELETE /folders/{repoId}/{folderIdOrPath}`. */
 export interface FolderDeleteOperation {
   op: 'folder.delete';
-  /** Bare folder UUID (not a `{ id }`/`{ path }` reference). Deletes the whole subtree. */
+  /**
+   * Bare folder UUID (not a `{ id }`/`{ path }` reference). Deletes the whole
+   * subtree; no `folder.create`/`folder.update` in the same plan may place a
+   * folder anywhere inside it (move folders out of it first).
+   */
   folder: string;
   expectedRevision: string;
 }

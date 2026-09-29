@@ -62,6 +62,10 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:revision-conflict` | 409 |
 | `urn:bootstrap:error:idempotency-key-reused` | 409 |
 | `urn:bootstrap:error:unsupported-media-type` | 415 |
+| `urn:bootstrap:error:digest-mismatch` | 400 |
+| `urn:bootstrap:error:possession-proof-invalid` | 403 |
+| `urn:bootstrap:error:upload-required` | 422 |
+| `urn:bootstrap:error:possession-proof-required` | 428 |
 | `urn:bootstrap:error:metadata-snapshot-failed` | 410 |
 | `urn:bootstrap:error:internal-error` | 500 |
 
@@ -716,7 +720,9 @@ and checking every `expectedRevision`, the server applies the plan in fixed phas
 Only the **final** state must have unique folder paths. A plan may delete a folder and create another under the same
 name, move or rename a folder into a name another operation frees up, or swap two sibling names. A plan whose final
 state would put two folders at the same path is rejected with `409` (`urn:bootstrap:error:folder-path-conflict`). A
-plan is rejected with `422` if a `parent` reference names a folder that a `folder.delete` in the same plan targets.
+plan is rejected with `422` if a `folder.create` or parent-changing `folder.update` would place a folder inside a
+subtree that a `folder.delete` in the same plan removes — whether its `parent` names the deleted folder itself (by
+`{"id": …}` or `{"path": …}`) or any folder beneath it that the plan doesn't move out first.
 
 ##### Responses
 
@@ -785,8 +791,8 @@ plan is rejected with `422` if a `parent` reference names a folder that a `folde
   name that is already taken.
 - `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`) — the plan is structurally invalid: duplicate
   `folder.create` ids, a missing `folder.create` `id`, a parent-reference cycle, a `folder.create` naming a
-  `folderType` that's a per-repository singleton (`root`/`albums`/`media`), a `folder.delete` target also referenced
-  as a parent elsewhere in the same plan, a `folder.update`/`folder.delete` of a folder created in the same plan, a
+  `folderType` that's a per-repository singleton (`root`/`albums`/`media`), a `folder.create`/`folder.update` placing a
+  folder inside a subtree a `folder.delete` in the same plan removes, a `folder.update`/`folder.delete` of a folder created in the same plan, a
   folder targeted by more than one `folder.update`/`folder.delete`, or more than the configured maximum number of
   operations. The `errors` extension member lists every issue found, each with the zero-based indexes of the
   `operations` it concerns (empty for plan-wide issues such as the operation limit); `detail` joins the same
@@ -1586,16 +1592,75 @@ If a media item with the given ID already exists, but the raw binary does not co
 
 The user must be a repository owner or editor to perform this action.
 
+The same endpoint also accepts an **upload claim**: the client sends only the file's SHA-256, and if the server
+already holds that file (uploaded by anyone, into any repository) the client proves it has the file by answering a
+challenge, and the item is created without transferring the bytes. See "Upload claims" below.
+
+#### Request headers
+
+- `Repr-Digest: sha-256=:<base64>:` (optional, [RFC 9530](https://www.rfc-editor.org/rfc/rfc9530)) — the SHA-256 of
+  the whole file. On a full upload, the server checks it against the received bytes and rejects a mismatch with `400`
+  (`urn:bootstrap:error:digest-mismatch`) without recording anything. Other digest algorithms in the header are
+  ignored.
+- `Possession-Proof: challenge="<token>", response="<hex>"` — only on an upload claim; see below.
+
 #### Request body
 
-The raw binary data of the media item.
+The raw binary data of the media item, or empty (`Content-Length: 0`) for an upload claim.
 
 #### Responses
 
-- `204 No Content` - the media item was created successfully
-- `403 Forbidden` — insufficient permission
+- `204 No Content` - the media item was created successfully; `Media-Item-Id: <uuid>` header set
+- `400 Bad Request` — `Repr-Digest` doesn't match the body (`urn:bootstrap:error:digest-mismatch`), or a malformed
+  `Repr-Digest`/`Possession-Proof` header
+- `403 Forbidden` — insufficient permission, or an invalid possession proof
 - `409 Conflict` — media item already exists
 - `415 Unsupported Media Type`
+- `422 Unprocessable Entity` — upload claim for a file the server can't accept a claim for; upload it in full
+- `428 Precondition Required` — upload claim accepted; the body carries a challenge
+
+#### Upload claims
+
+1. **Claim.** Send the `PUT` with `Content-Length: 0` and a `Repr-Digest` carrying `sha-256`. `Content-Type` is not
+   needed; the media type comes from the stored file.
+   - If an item with this ID already exists, the response is `204` when its original has this SHA-256 and `409`
+     otherwise. No proof is needed.
+   - If the server can't accept a claim for this hash, the response is `422` with
+     `urn:bootstrap:error:upload-required`. Repeat the request with the full body. This happens when the hash is
+     unknown, but also for some files the server does hold (for example ones uploaded before upload claims existed),
+     and the response doesn't say which.
+   - Otherwise the response is `428` with a challenge:
+
+     ```json
+     {
+       "type": "urn:bootstrap:error:possession-proof-required",
+       "status": 428,
+       "title": "Possession Proof Required",
+       "detail": "Answer the challenge to prove possession of the file, or upload it in full",
+       "instance": null,
+       "challenge": "<opaque token>",
+       "nonce": "<hex>",
+       "chunkSize": 1048576,
+       "chunks": [3, 17, 402, 3051],
+       "expiresAt": "2026-09-29T12:05:00Z"
+     }
+     ```
+
+2. **Prove.** Split the file into `chunkSize`-byte chunks (the last may be shorter), numbered from 0. Compute
+
+   ```text
+   response = hex( HMAC-SHA256( key = hex-decode(nonce), data = SHA-256(chunk[c1]) ‖ SHA-256(chunk[c2]) ‖ … ) )
+   ```
+
+   over the listed `chunks`, in the order given, and repeat the claim `PUT` (still `Content-Length: 0` and the same
+   `Repr-Digest`) with `Possession-Proof: challenge="<token>", response="<hex>"`. `challenge` is the token exactly as
+   received. Treat it as opaque.
+   - `204` + `Media-Item-Id`: the item was created from the stored file. Nothing is reprocessed.
+   - `403` (`urn:bootstrap:error:possession-proof-invalid`): wrong response, or the challenge expired or was issued
+     for a different user, repository, item ID, or file. Claim again, or upload in full.
+
+A challenge is valid for a few minutes (`upload_claims.challenge_ttl_seconds`) and only for the same user,
+repository, item ID and file. Sending `Possession-Proof` with a non-empty body is a `400`.
 
 ---
 

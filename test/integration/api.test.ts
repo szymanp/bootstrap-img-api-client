@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { crc32, deflateSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ApiError, BootstrapClient, ErrorType, FolderRef, MediaRef, isApiError } from '../../src/index';
 
@@ -10,6 +11,28 @@ const baseUrl = process.env.BOOTSTRAP_API_URL;
 const email = process.env.BOOTSTRAP_TEST_EMAIL ?? 'test@example.com';
 
 const run = baseUrl ? describe : describe.skip;
+
+/** A valid 1x1 PNG carrying `text` in a tEXt chunk, so each call yields a never-seen file. */
+function uniquePng(text: string): Uint8Array<ArrayBuffer> {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]); // 1x1, 8-bit RGB
+  return new Uint8Array(
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk('IHDR', ihdr),
+      chunk('tEXt', Buffer.from(`Comment\0${text}`, 'latin1')),
+      chunk('IDAT', deflateSync(Buffer.from([0, 0x80, 0x80, 0x80]))),
+      chunk('IEND', Buffer.alloc(0)),
+    ]),
+  );
+}
 
 run('integration (live server)', () => {
   const client = new BootstrapClient({ baseUrl, defaultLanguage: 'en-US' });
@@ -153,6 +176,40 @@ run('integration (live server)', () => {
           expect(again.notModified).toBe(true);
         }
       }
+    } finally {
+      const fresh = await client.repos.get(repoId);
+      await client.repos.delete(repoId, fresh.meta.revision!);
+    }
+  });
+
+  it('checks Repr-Digest and creates a second item from an upload claim', async () => {
+    const repo = await client.repos.create({ name: `repo-${randomUUID()}`, title: 'IT Claims' });
+    const repoId = repo.data.id;
+    try {
+      const media = client.media(repoId);
+      const bytes = uniquePng(randomUUID());
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+
+      // A wrong digest is rejected before anything is stored.
+      const mismatch = await media
+        .uploadById(randomUUID(), bytes, 'image/png', { sha256: '00'.repeat(32) })
+        .catch((e: unknown) => e);
+      expect(isApiError(mismatch, ErrorType.DigestMismatch)).toBe(true);
+
+      // The first upload has to transfer the bytes: the server has never seen them.
+      const first = await media.uploadById(randomUUID(), bytes, 'image/png', { sha256, claim: true });
+      expect(first.transferred).toBe(true);
+
+      // The same file under a new id is claimed without sending it.
+      const secondId = randomUUID();
+      const second = await media.uploadById(secondId, new Blob([bytes]), 'image/png', { sha256, claim: true });
+      expect(second).toEqual({ mediaItemId: secondId, transferred: false });
+      const meta = await media.metadata(MediaRef.id(secondId), { fields: ['originalHash'] });
+      expect(meta.data.originalHash).toBe(sha256);
+
+      // Claiming an id that already holds this file needs no proof.
+      const again = await media.claimById(secondId, sha256);
+      expect(again.transferred).toBe(false);
     } finally {
       const fresh = await client.repos.get(repoId);
       await client.repos.delete(repoId, fresh.meta.revision!);

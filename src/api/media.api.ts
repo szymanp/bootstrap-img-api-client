@@ -1,3 +1,4 @@
+import type { Sha256Input } from '../http/digest';
 import type { FolderRefInput, MediaRef } from '../refs';
 import type { MediaItemVariantName, ReadOptions } from '../types/common';
 import type { Collection, HlsRenditionLink, MediaItemVariantLink, Resource } from '../types/envelope';
@@ -18,6 +19,33 @@ export interface DownloadOptions {
   size?: string;
   /** `If-None-Match` value(s) for a conditional GET. */
   ifNoneMatch?: string | string[];
+}
+
+/** Options for {@link IMediaApi.uploadById}. */
+export interface UploadByIdOptions {
+  /**
+   * SHA-256 of the whole file (32 raw bytes, or hex/base64). Sent as
+   * `Repr-Digest`; the server rejects a full upload whose bytes don't match
+   * with a `400` {@link ErrorType.DigestMismatch}.
+   */
+  sha256?: Sha256Input;
+  /**
+   * Try an upload claim before sending the bytes: if the server already holds
+   * a file with this `sha256`, prove possession and create the item without
+   * transferring it. Requires `sha256` and a `Blob`/`ArrayBuffer`/
+   * `ArrayBufferView` body (a `ReadableStream` can't be re-read for the
+   * fallback upload). Falls back to a full upload when the server won't take
+   * a claim, the proof is rejected, or Web Crypto isn't available.
+   */
+  claim?: boolean;
+}
+
+/** An answered possession-proof challenge, for {@link IMediaApi.claimById}. */
+export interface PossessionProof {
+  /** The challenge token, exactly as received. */
+  challenge: string;
+  /** Hex-encoded HMAC response (see `computePossessionProof`). */
+  response: string;
 }
 
 export interface MediaItemVariant extends MediaItemVariantLink {
@@ -51,9 +79,34 @@ export interface IMediaApi {
    * `image/*` or `video/*` type. The user must be a repository owner or editor.
    * Throws an {@link ApiError} with status `409` if an item already exists at
    * that id whose original blob differs from the uploaded binary. Returns the
-   * media-item id echoed by the server.
+   * media-item id echoed by the server, and whether the bytes were sent.
+   *
+   * With `options.claim`, only the chunks the server challenges for are read
+   * from `body`. In Node, pass `await fs.openAsBlob(path)` as the body and a
+   * streamed `node:crypto` hash as `sha256` to avoid loading the file into
+   * memory.
    */
-  uploadById(mediaItemId: string, body: BinaryBody, contentType: string): Promise<UploadResult>;
+  uploadById(
+    mediaItemId: string,
+    body: BinaryBody,
+    contentType: string,
+    options?: UploadByIdOptions,
+  ): Promise<UploadResult>;
+
+  /**
+   * Low-level upload claim: `PUT` with an empty body and `Repr-Digest`, plus
+   * `Possession-Proof` when `proof` is given. Resolves (`transferred: false`)
+   * when the item was created, or already exists with this hash. Otherwise
+   * throws an {@link ApiError}:
+   * - `428` {@link ErrorType.PossessionProofRequired} — `problem` is a
+   *   `PossessionProofRequiredProblem`; answer it and call again with `proof`.
+   * - `422` {@link ErrorType.UploadRequired} — upload the file in full.
+   * - `403` {@link ErrorType.PossessionProofInvalid} — wrong or expired proof.
+   * - `409` — an item with this id exists with a different hash.
+   *
+   * {@link uploadById} with `claim: true` runs this whole flow.
+   */
+  claimById(mediaItemId: string, sha256: Sha256Input, proof?: PossessionProof): Promise<UploadResult>;
 
   /**
    * Download a media binary. Returns `{ notModified: true }` when a conditional

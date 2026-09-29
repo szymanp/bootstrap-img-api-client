@@ -36,6 +36,10 @@ export const ErrorType = {
   MediaItemAlreadyExists: 'urn:bootstrap:error:media-item-already-exists',
   RevisionConflict: 'urn:bootstrap:error:revision-conflict',
   UnsupportedMediaType: 'urn:bootstrap:error:unsupported-media-type',
+  DigestMismatch: 'urn:bootstrap:error:digest-mismatch',
+  PossessionProofInvalid: 'urn:bootstrap:error:possession-proof-invalid',
+  UploadRequired: 'urn:bootstrap:error:upload-required',
+  PossessionProofRequired: 'urn:bootstrap:error:possession-proof-required',
   MetadataSnapshotFailed: 'urn:bootstrap:error:metadata-snapshot-failed',
   IdempotencyKeyReused: 'urn:bootstrap:error:idempotency-key-reused',
   InternalError: 'urn:bootstrap:error:internal-error',
@@ -85,6 +89,23 @@ export interface ValidationIssue {
  */
 export interface ValidationFailedProblem extends ProblemDetails {
   errors?: ValidationIssue[];
+}
+
+/**
+ * `ErrorType.PossessionProofRequired` (HTTP 428): the server holds the file
+ * named by an upload claim and wants proof that the client has it too.
+ */
+export interface PossessionProofRequiredProblem extends ProblemDetails {
+  /** Opaque token; echo it back exactly as received. */
+  challenge: string;
+  /** Hex-encoded HMAC key. */
+  nonce: string;
+  /** Size in bytes of each chunk the file is split into (the last may be shorter). */
+  chunkSize: number;
+  /** Zero-based chunk indexes to hash, in the order given. */
+  chunks: number[];
+  /** When the challenge stops being accepted (ISO 8601). */
+  expiresAt: string;
 }
 
 /** Error thrown for any non-2xx (and non-304) HTTP response. */
