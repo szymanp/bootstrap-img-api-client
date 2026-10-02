@@ -34,6 +34,8 @@ export const ErrorType = {
   FolderPathConflict: 'urn:bootstrap:error:folder-path-conflict',
   MediaItemNotFound: 'urn:bootstrap:error:media-item-not-found',
   MediaItemAlreadyExists: 'urn:bootstrap:error:media-item-already-exists',
+  /** A `size` variant was requested before the image was processed; retry later. */
+  MediaVariantNotReady: 'urn:bootstrap:error:media-variant-not-ready',
   RevisionConflict: 'urn:bootstrap:error:revision-conflict',
   UnsupportedMediaType: 'urn:bootstrap:error:unsupported-media-type',
   DigestMismatch: 'urn:bootstrap:error:digest-mismatch',

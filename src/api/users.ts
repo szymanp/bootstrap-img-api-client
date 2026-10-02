@@ -1,8 +1,9 @@
-import { parseVoid, Transport } from '../http/transport';
+import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
+import type { RegisterUserInput, UpdateUserInput, User } from '../types/users';
 import type { IUsersApi } from './users.api';
 
-/** User registration & verification endpoints. */
+/** User registration, verification & profile endpoints. */
 export class UsersApi implements IUsersApi {
   constructor(
     private readonly transport: Transport,
@@ -10,12 +11,22 @@ export class UsersApi implements IUsersApi {
   ) {}
 
   /** Register a new user and send a verification email. Always returns 204. */
-  async register(email: string): Promise<void> {
+  async register(input: RegisterUserInput): Promise<void> {
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).createUser().href,
-      body: { kind: 'json', value: { email } },
+      body: { kind: 'json', value: { email: input.email, firstName: input.firstName, lastName: input.lastName } },
       parse: parseVoid,
+    });
+  }
+
+  /** Update a user's first and/or last name. `userIdOrEmail` is a UUID or an email. */
+  async update(userIdOrEmail: string, changes: UpdateUserInput): Promise<User> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).updateUser(userIdOrEmail).href,
+      body: { kind: 'json', value: changes },
+      parse: parseJson<User>,
     });
   }
 

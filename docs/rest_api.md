@@ -59,6 +59,7 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:repository-would-have-no-owners` | 422 |
 | `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` / `:folder-already-exists` / `:folder-path-conflict` | 404 / 409 |
 | `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
+| `urn:bootstrap:error:media-variant-not-ready` | 404 |
 | `urn:bootstrap:error:revision-conflict` | 409 |
 | `urn:bootstrap:error:idempotency-key-reused` | 409 |
 | `urn:bootstrap:error:unsupported-media-type` | 415 |
@@ -168,6 +169,7 @@ variant URLs are discovered today rather than built from a root template.
 | `rel` | Kind | Method & target |
 | --- | --- | --- |
 | `users:create` | href | `POST /users` |
+| `users:update` | template | `POST /users/{userIdOrEmail}` |
 | `users:resend-verification-token` | template | `POST /users/{userIdOrEmail}/action;resend-verification-token` |
 | `users:verify-user` | template | `POST /users/{userIdOrEmail}/action;verify-user` |
 
@@ -241,6 +243,8 @@ Returns details about the current session.
 {
   "principal": "<uuid>",
   "email": "user@example.com",
+  "firstName": "Jan",
+  "lastName": "Kowalski",
   "createdAt": "2026-01-01T00:00:00Z",
   "expiresAt":  "2026-01-08T00:00:00Z"
 }
@@ -262,12 +266,45 @@ Registers a new user and sends a verification email. Always returns 204 to avoid
 #### Request body
 
 ```json
-{ "email": "user@example.com" }
+{ "email": "user@example.com", "firstName": "Jan", "lastName": "Kowalski" }
 ```
+
+All three fields are required. Names are trimmed; a blank name, or one longer than 255 characters, is rejected.
 
 #### Responses
 
 - `204 No Content`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a missing, blank, or too-long `firstName`/`lastName`
+
+---
+
+### POST /users/{userIdOrEmail}
+
+Updates a user's first and/or last name. `userIdOrEmail` is a UUID or an email address. Only the user themselves may
+update their profile: the request must carry that user's session.
+
+#### Request body
+
+```json
+{ "firstName": "Jan", "lastName": "Kowalski" }
+```
+
+Both fields are optional; an omitted field is left unchanged. Names are mandatory, so `null`, a blank name, or one
+longer than 255 characters is rejected. Names are trimmed.
+
+#### Response body
+
+```json
+{ "id": "<uuid>", "email": "user@example.com", "firstName": "Jan", "lastName": "Kowalski" }
+```
+
+#### Responses
+
+- `200 OK`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a `null`, blank, or too-long name
+- `401 Unauthorized` — no session
+- `403 Forbidden` — the session belongs to a different user
+- `404 Not Found` — no such user
 
 ---
 
@@ -1397,7 +1434,10 @@ Downloads the original binary. Supports conditional GET via `If-None-Match` / ET
 
 - `200 OK` — binary stream with `Content-Type`, `Content-Length`, `ETag`
 - `304 Not Modified` — ETag matches
-- `404 Not Found`
+- `404 Not Found` (`urn:bootstrap:error:media-item-not-found`) — no such item, or `size` isn't a variant this image
+  has (not a configured `images.sizes` name, or the image already fits within that size)
+- `404 Not Found` (`urn:bootstrap:error:media-variant-not-ready`) — `size` was requested but the image hasn't been
+  processed yet (its `image_transform` job is pending, e.g. a camera raw file awaiting decode); retry later
 
 ---
 

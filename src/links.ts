@@ -48,6 +48,11 @@ export class ServiceLinks {
     return this.href('users:create');
   }
 
+  /** `users:update` — update a user's profile (first/last name). */
+  updateUser(userIdOrEmail: string): HrefLink {
+    return this.resolve('users:update', { userIdOrEmail: encode(userIdOrEmail) });
+  }
+
   /** `users:verify-user` — verify a user's email. */
   verifyUser(userIdOrEmail: string): HrefLink {
     return this.resolve('users:verify-user', { userIdOrEmail: encode(userIdOrEmail) });

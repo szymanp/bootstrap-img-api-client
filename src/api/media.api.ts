@@ -62,6 +62,10 @@ export interface IMediaApi {
   /**
    * Download a media binary. Returns `{ notModified: true }` when a conditional
    * GET matches (HTTP 304); otherwise the binary plus content type and ETag.
+   * With `size`, throws a 404 `ApiError` of type `ErrorType.MediaItemNotFound`
+   * when the image has no such variant (unknown size, or the image already fits
+   * within it), or `ErrorType.MediaVariantNotReady` when the image hasn't been
+   * processed yet — retry later.
    */
   download(ref: MediaRef, options?: DownloadOptions): Promise<DownloadResult>;
 

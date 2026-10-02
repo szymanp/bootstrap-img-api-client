@@ -33,6 +33,16 @@ export interface Session {
   email: string;
 
   /**
+   * The first name of the user.
+   */
+  firstName: string;
+
+  /**
+   * The last name of the user.
+   */
+  lastName: string;
+
+  /**
    * The date and time when the session was started.
    * 
    * The format is: 2026-01-01T00:00:00Z

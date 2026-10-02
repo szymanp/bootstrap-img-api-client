@@ -89,6 +89,30 @@ describe('auth', () => {
   });
 });
 
+describe('users', () => {
+  it('registers with email and names', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    await client.users.register({ email: 'jan@example.com', firstName: 'Jan', lastName: 'Kowalski' });
+    expect(mock.last.url).toBe('http://localhost:8080/users');
+    expect(mock.last.method).toBe('POST');
+    expect(JSON.parse(mock.last.body!)).toEqual({ email: 'jan@example.com', firstName: 'Jan', lastName: 'Kowalski' });
+  });
+
+  it('updates a user profile and returns the user', async () => {
+    const user = { id: 'u1', email: 'jan@example.com', firstName: 'Janek', lastName: 'Kowalski' };
+    const mock = new MockFetch().enqueue({ status: 200, json: user });
+    const client = makeClient(mock);
+
+    const result = await client.users.update('jan@example.com', { firstName: 'Janek' });
+    expect(result).toEqual(user);
+    expect(mock.last.url).toBe('http://localhost:8080/users/jan%40example.com');
+    expect(mock.last.method).toBe('POST');
+    expect(JSON.parse(mock.last.body!)).toEqual({ firstName: 'Janek' });
+  });
+});
+
 describe('repositories', () => {
   it('creates with default Accept-Language and Content-Language', async () => {
     const mock = new MockFetch().enqueue({

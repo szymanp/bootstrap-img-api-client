@@ -116,7 +116,7 @@ export class RepoService {
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `client.serviceRoot`     | `GET /` link discovery, template resolution                                                                                                                   |
 | `client.auth`            | `sendToken`, `login`, `loginWithTestToken`, `logout`, `session`                                                                                               |
-| `client.users`           | `register`, `resendVerification`, `verify`                                                                                                                    |
+| `client.users`           | `register`, `update`, `resendVerification`, `verify`                                                                                                          |
 | `client.repos`           | `create`, `query`, `get`, `update`, `delete`                                                                                                                  |
 | `client.folders(repoId)` | `create`, `get`, `update`, `delete`, `listRoot`, `list`, `tree`, `getText`/`putText`, `getPermissions`/`patchPermissions`, `getMedia`/`putMedia`/`patchMedia` |
 | `client.media(repoId)`   | `upload`, `download` (incl. variants & conditional GET), `metadata`, `list`                                                                                   |

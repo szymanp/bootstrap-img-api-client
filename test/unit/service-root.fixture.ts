@@ -130,6 +130,11 @@ export const serviceRootFixture: ServiceRoot = {
       fields: ['repoId', 'folderIdOrPath'],
     },
     'users:create': { rel: 'users:create', href: '/users' },
+    'users:update': {
+      rel: 'users:update',
+      template: '/users/{userIdOrEmail}',
+      fields: ['userIdOrEmail'],
+    },
     'folders:list-media': {
       rel: 'folders:list-media',
       template: '/folders/{repoId}/{folderIdOrPath}/media',
