@@ -11,56 +11,6 @@ import type {
   UploadResult,
 } from '../types/media';
 
-export type MediaResource = Resource<MediaMetadata>;
-
-/** Options for downloading a media binary. */
-export interface DownloadOptions {
-  /** Variant name (e.g. `thumbnail`, `medium`) instead of the original. */
-  size?: string;
-  /** `If-None-Match` value(s) for a conditional GET. */
-  ifNoneMatch?: string | string[];
-}
-
-/** Options for {@link IMediaApi.uploadById}. */
-export interface UploadByIdOptions {
-  /**
-   * SHA-256 of the whole file (32 raw bytes, or hex/base64). Sent as
-   * `Repr-Digest`; the server rejects a full upload whose bytes don't match
-   * with a `400` {@link ErrorType.DigestMismatch}.
-   */
-  sha256?: Sha256Input;
-  /**
-   * Try an upload claim before sending the bytes: if the server already holds
-   * a file with this `sha256`, prove possession and create the item without
-   * transferring it. Requires `sha256` and a `Blob`/`ArrayBuffer`/
-   * `ArrayBufferView` body (a `ReadableStream` can't be re-read for the
-   * fallback upload). Falls back to a full upload when the server won't take
-   * a claim, the proof is rejected, or Web Crypto isn't available.
-   */
-  claim?: boolean;
-}
-
-/** An answered possession-proof challenge, for {@link IMediaApi.claimById}. */
-export interface PossessionProof {
-  /** The challenge token, exactly as received. */
-  challenge: string;
-  /** Hex-encoded HMAC response (see `computePossessionProof`). */
-  response: string;
-}
-
-export interface MediaItemVariant extends MediaItemVariantLink {
-  /** The name of this variant. E.g. "primary" or "fhd". */
-  name: MediaItemVariantName;
-  /** The type of media (image or video) that this variant represents. */
-  type: MediaType;
-}
-
-/** One HLS rendition (variant playlist) of a video media item, e.g. "hd". */
-export interface HlsRendition extends HlsRenditionLink {
-  /** The name of this rendition. E.g. "hd" or "sd". */
-  name: MediaItemVariantName;
-}
-
 /** Media-item endpoints, scoped to a single repository. */
 export interface IMediaApi {
   /**
@@ -143,4 +93,54 @@ export interface IMediaApi {
 
   /** List media items in a folder. */
   list(query: MediaListQuery, options?: { acceptLanguage?: string }): Promise<Collection<MediaResource>>;
+}
+
+export type MediaResource = Resource<MediaMetadata>;
+
+/** Options for downloading a media binary. */
+export interface DownloadOptions {
+  /** Variant name (e.g. `thumbnail`, `medium`) instead of the original. */
+  size?: string;
+  /** `If-None-Match` value(s) for a conditional GET. */
+  ifNoneMatch?: string | string[];
+}
+
+/** Options for {@link IMediaApi.uploadById}. */
+export interface UploadByIdOptions {
+  /**
+   * SHA-256 of the whole file (32 raw bytes, or hex/base64). Sent as
+   * `Repr-Digest`; the server rejects a full upload whose bytes don't match
+   * with a `400` {@link ErrorType.DigestMismatch}.
+   */
+  sha256?: Sha256Input;
+  /**
+   * Try an upload claim before sending the bytes: if the server already holds
+   * a file with this `sha256`, prove possession and create the item without
+   * transferring it. Requires `sha256` and a `Blob`/`ArrayBuffer`/
+   * `ArrayBufferView` body (a `ReadableStream` can't be re-read for the
+   * fallback upload). Falls back to a full upload when the server won't take
+   * a claim, the proof is rejected, or Web Crypto isn't available.
+   */
+  claim?: boolean;
+}
+
+/** An answered possession-proof challenge, for {@link IMediaApi.claimById}. */
+export interface PossessionProof {
+  /** The challenge token, exactly as received. */
+  challenge: string;
+  /** Hex-encoded HMAC response (see `computePossessionProof`). */
+  response: string;
+}
+
+export interface MediaItemVariant extends MediaItemVariantLink {
+  /** The name of this variant. E.g. "primary" or "fhd". */
+  name: MediaItemVariantName;
+  /** The type of media (image or video) that this variant represents. */
+  type: MediaType;
+}
+
+/** One HLS rendition (variant playlist) of a video media item, e.g. "hd". */
+export interface HlsRendition extends HlsRenditionLink {
+  /** The name of this rendition. E.g. "hd" or "sd". */
+  name: MediaItemVariantName;
 }

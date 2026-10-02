@@ -5,59 +5,6 @@ import type { CreateMetadataSnapshotInput, MetadataSnapshotRecord } from '../typ
 import type { MetadataSyncPlan } from '../types/metadata-sync';
 import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from '../types/repositories';
 
-export type RepositoryResource = Resource<Repository>;
-
-/** Result of {@link IRepositoriesApi.getChangelog}. */
-export type ChangelogCollection = Collection<Resource<AuditLogEntry>>;
-
-/** Result of {@link IRepositoriesApi.createMetadataSnapshot} (always `202 Accepted`). */
-export interface CreateMetadataSnapshotResult {
-  snapshotId: string;
-  createdAt: string;
-}
-
-/** Query for {@link IRepositoriesApi.getMetadataSnapshot}. */
-export interface MetadataSnapshotQuery extends PageQuery {
-  /**
-   * Long-polls (holding the request open) for up to this many seconds while
-   * the snapshot is still `Building`, instead of returning immediately.
-   * Clamped server-side to a configured maximum.
-   */
-  wait?: number;
-}
-
-/** A `Ready` snapshot's metadata. */
-export interface MetadataSnapshotMeta {
-  snapshotId: string;
-  repositoryVersion: number;
-  scopeHash: string;
-  formatVersion: number;
-  createdAt: string;
-  offset: number;
-  limit: number;
-}
-
-/** Result of {@link IRepositoriesApi.getMetadataSnapshot}: still building, or a page of a `Ready` snapshot. */
-export type MetadataSnapshotResult =
-  | { status: 'building' }
-  | { status: 'ready'; meta: MetadataSnapshotMeta; records: MetadataSnapshotRecord[] };
-
-/** Result of {@link IRepositoriesApi.applyMetadataSync}. */
-export interface MetadataSyncResult {
-  /** Echoes the request's `Idempotency-Key`. */
-  operationId: string;
-  previousRepositoryVersion: number;
-  repositoryVersion: number;
-  /** One entry per resource the plan actually mutated (`"repository"` and/or `"folder:<uuid>"`). */
-  revisions: Record<string, string>;
-}
-
-/** Options for {@link IRepositoriesApi.getByName}. */
-export interface GetRepositoryByNameOptions extends ReadOptions {
-  /** Organization qualifying the repository name. */
-  org?: string;
-}
-
 /** Repository endpoints. */
 export interface IRepositoriesApi {
   /**
@@ -215,4 +162,57 @@ export interface IRepositoriesApi {
     idempotencyKey: string,
     plan: MetadataSyncPlan,
   ): Promise<MetadataSyncResult>;
+}
+
+export type RepositoryResource = Resource<Repository>;
+
+/** Result of {@link IRepositoriesApi.getChangelog}. */
+export type ChangelogCollection = Collection<Resource<AuditLogEntry>>;
+
+/** Result of {@link IRepositoriesApi.createMetadataSnapshot} (always `202 Accepted`). */
+export interface CreateMetadataSnapshotResult {
+  snapshotId: string;
+  createdAt: string;
+}
+
+/** Query for {@link IRepositoriesApi.getMetadataSnapshot}. */
+export interface MetadataSnapshotQuery extends PageQuery {
+  /**
+   * Long-polls (holding the request open) for up to this many seconds while
+   * the snapshot is still `Building`, instead of returning immediately.
+   * Clamped server-side to a configured maximum.
+   */
+  wait?: number;
+}
+
+/** A `Ready` snapshot's metadata. */
+export interface MetadataSnapshotMeta {
+  snapshotId: string;
+  repositoryVersion: number;
+  scopeHash: string;
+  formatVersion: number;
+  createdAt: string;
+  offset: number;
+  limit: number;
+}
+
+/** Result of {@link IRepositoriesApi.getMetadataSnapshot}: still building, or a page of a `Ready` snapshot. */
+export type MetadataSnapshotResult =
+  | { status: 'building' }
+  | { status: 'ready'; meta: MetadataSnapshotMeta; records: MetadataSnapshotRecord[] };
+
+/** Result of {@link IRepositoriesApi.applyMetadataSync}. */
+export interface MetadataSyncResult {
+  /** Echoes the request's `Idempotency-Key`. */
+  operationId: string;
+  previousRepositoryVersion: number;
+  repositoryVersion: number;
+  /** One entry per resource the plan actually mutated (`"repository"` and/or `"folder:<uuid>"`). */
+  revisions: Record<string, string>;
+}
+
+/** Options for {@link IRepositoriesApi.getByName}. */
+export interface GetRepositoryByNameOptions extends ReadOptions {
+  /** Organization qualifying the repository name. */
+  org?: string;
 }

@@ -16,69 +16,6 @@ import type {
 } from '../types/folders';
 import type { MediaMetadata } from '../types/media';
 
-export type FolderResource = Resource<Folder, FolderRelated>;
-export type PermissionsCollection = Collection<Resource<EffectivePermission>, { folder?: FolderResource[] }>;
-/** Result of a media-membership query: membership records plus the full media-item resources. */
-export type MediaMembershipCollection = Collection<
-  Resource<MediaMembership>,
-  { mediaitem?: Resource<MediaMetadata>[] }
->;
-
-/** Related resources attached to a {@link IFoldersApi.getTextMedia} response. */
-export interface TextMediaRelated {
-  folders?: FolderResource[];
-  mediaItems?: Resource<MediaMetadata>[];
-}
-
-/** Collection returned by {@link IFoldersApi.getTextMedia}. */
-export type TextMediaCollection = Collection<TextMediaRecord, TextMediaRelated>;
-
-/** Options for {@link IFoldersApi.getTextMedia}. */
-export interface TextMediaOptions {
-  /** Language version of the folder text to resolve references against. */
-  acceptLanguage?: string;
-  /** `If-None-Match` value(s) for a conditional GET (the ETag tracks the folder revision). */
-  ifNoneMatch?: string | string[];
-}
-
-/** A folder's text-reference listing (200) or a not-modified result (304). */
-export type TextMediaResult =
-  | { notModified: false; result: TextMediaCollection; etag: string | null }
-  | { notModified: true; etag: string | null };
-
-/** Full markdown body of a folder's `text` subresource plus its metadata. */
-export interface FolderText {
-  text: string;
-  /** Language the returned text is in (from `Content-Language`). */
-  contentLanguage: string | null;
-  /** The folder's current revision (from `Revision-Id`); pass back on writes. */
-  revision: string | null;
-}
-
-/** A markdown reference that did not resolve to an existing folder/media item. */
-export interface UnresolvedReference {
-  /** `media` for `media:`/`media-path:` references, `folder` for `folder:`/`folder-path:`. */
-  type: 'media' | 'folder';
-  /** The original `scheme:target` reference text. */
-  reference: string;
-  /** `missing` (well-formed, no such target) or `malformed` (bad UUID, or a path escaping the repository root). */
-  status: 'missing' | 'malformed';
-  addressKind: 'by-id' | 'by-path';
-}
-
-/** Result of storing a folder's markdown body via {@link IFoldersApi.putText}. */
-export interface PutTextResult {
-  /** The folder's revision after the update (from `Revision-Id` / `meta.revision`). */
-  revision: string | null;
-  /**
-   * References found in the body that did not resolve to an existing folder or
-   * media item; empty when every reference resolved. Every reference found —
-   * resolved, missing, or malformed alike — is persisted server-side and can
-   * be queried later via {@link IFoldersApi.getTextMedia}.
-   */
-  unresolvedReferences: UnresolvedReference[];
-}
-
 /** Folder endpoints, scoped to a single repository. */
 export interface IFoldersApi {
   /** Create a folder under an existing parent. */
@@ -188,4 +125,67 @@ export interface IFoldersApi {
    * the folder's custom order.
    */
   patchMedia(ref: FolderRefInput, patches: MediaMembershipPatch[]): Promise<MediaMembership[]>;
+}
+
+export type FolderResource = Resource<Folder, FolderRelated>;
+export type PermissionsCollection = Collection<Resource<EffectivePermission>, { folder?: FolderResource[] }>;
+/** Result of a media-membership query: membership records plus the full media-item resources. */
+export type MediaMembershipCollection = Collection<
+  Resource<MediaMembership>,
+  { mediaitem?: Resource<MediaMetadata>[] }
+>;
+
+/** Related resources attached to a {@link IFoldersApi.getTextMedia} response. */
+export interface TextMediaRelated {
+  folders?: FolderResource[];
+  mediaItems?: Resource<MediaMetadata>[];
+}
+
+/** Collection returned by {@link IFoldersApi.getTextMedia}. */
+export type TextMediaCollection = Collection<TextMediaRecord, TextMediaRelated>;
+
+/** Options for {@link IFoldersApi.getTextMedia}. */
+export interface TextMediaOptions {
+  /** Language version of the folder text to resolve references against. */
+  acceptLanguage?: string;
+  /** `If-None-Match` value(s) for a conditional GET (the ETag tracks the folder revision). */
+  ifNoneMatch?: string | string[];
+}
+
+/** A folder's text-reference listing (200) or a not-modified result (304). */
+export type TextMediaResult =
+  | { notModified: false; result: TextMediaCollection; etag: string | null }
+  | { notModified: true; etag: string | null };
+
+/** Full markdown body of a folder's `text` subresource plus its metadata. */
+export interface FolderText {
+  text: string;
+  /** Language the returned text is in (from `Content-Language`). */
+  contentLanguage: string | null;
+  /** The folder's current revision (from `Revision-Id`); pass back on writes. */
+  revision: string | null;
+}
+
+/** A markdown reference that did not resolve to an existing folder/media item. */
+export interface UnresolvedReference {
+  /** `media` for `media:`/`media-path:` references, `folder` for `folder:`/`folder-path:`. */
+  type: 'media' | 'folder';
+  /** The original `scheme:target` reference text. */
+  reference: string;
+  /** `missing` (well-formed, no such target) or `malformed` (bad UUID, or a path escaping the repository root). */
+  status: 'missing' | 'malformed';
+  addressKind: 'by-id' | 'by-path';
+}
+
+/** Result of storing a folder's markdown body via {@link IFoldersApi.putText}. */
+export interface PutTextResult {
+  /** The folder's revision after the update (from `Revision-Id` / `meta.revision`). */
+  revision: string | null;
+  /**
+   * References found in the body that did not resolve to an existing folder or
+   * media item; empty when every reference resolved. Every reference found —
+   * resolved, missing, or malformed alike — is persisted server-side and can
+   * be queried later via {@link IFoldersApi.getTextMedia}.
+   */
+  unresolvedReferences: UnresolvedReference[];
 }

@@ -1,11 +1,6 @@
 import type { ServiceLinks } from '../links';
 import type { Link, LinkSet } from '../types/envelope';
 
-/** Body of `GET /` — a `links` envelope advertising every endpoint. */
-export interface ServiceRoot {
-  links: LinkSet;
-}
-
 /** Service-root discovery. Clients can follow links instead of hard-coding paths. */
 export interface IServiceRootApi {
   /** Fetch the service root link set. */
@@ -20,4 +15,9 @@ export interface IServiceRootApi {
    * instead of hard-coding paths.
    */
   links(): Promise<ServiceLinks>;
+}
+
+/** Body of `GET /` — a `links` envelope advertising every endpoint. */
+export interface ServiceRoot {
+  links: LinkSet;
 }
