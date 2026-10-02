@@ -1,4 +1,8 @@
+import type { UuidString } from './common';
 import type { FolderReference } from './folders';
+
+/** The identifier of a media item. */
+export type MediaItemId = UuidString;
 
 export type MediaType = 'image' | 'video';
 export type MediaVisibility = 'private' | 'normal' | 'published' | string;
@@ -57,7 +61,7 @@ export interface MediaEffectiveMetadata {
 
 /** Metadata payload returned by the media `metadata` endpoints. */
 export interface MediaMetadata {
-  id: string;
+  id: MediaItemId;
   type: MediaType | string;
   visibility: MediaVisibility;
   /** The hash of the original blob associated with this media item. */
@@ -100,7 +104,7 @@ export type BinaryBody = Blob | ArrayBuffer | ArrayBufferView | ReadableStream<U
 
 /** Result of a media upload. */
 export interface UploadResult {
-  mediaItemId: string;
+  mediaItemId: MediaItemId;
   /**
    * Set by `uploadById`: `false` when the item was created from an upload
    * claim without sending the bytes, `true` when the file was uploaded in full.

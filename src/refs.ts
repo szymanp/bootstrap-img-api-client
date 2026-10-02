@@ -1,4 +1,5 @@
-import type { FolderReference } from './types/folders';
+import type { FolderId, FolderReference } from './types/folders';
+import type { MediaItemId } from './types/media';
 
 /**
  * A reference to a folder. Folders are addressed either by UUID (`id;<uuid>`) or
@@ -13,7 +14,7 @@ export class FolderRef {
   ) {}
 
   /** Reference a folder by UUID. */
-  static id(uuid: string): FolderRef {
+  static id(uuid: FolderId): FolderRef {
     return new FolderRef('id', [uuid]);
   }
 
@@ -55,7 +56,7 @@ export class FolderRef {
 }
 
 /** Anything accepted where a folder reference is expected. */
-export type FolderRefInput = FolderRef | FolderReference | string;
+export type FolderRefInput = FolderRef | FolderReference | FolderId;
 
 /** Split a slash path into non-empty segments. */
 function splitPath(path: string): string[] {
@@ -67,7 +68,7 @@ function splitPath(path: string): string[] {
  * or by the SHA-256 hash of its blob (metadata lookup only).
  */
 export type MediaAddressing =
-  | { kind: 'id'; mediaItemId: string }
+  | { kind: 'id'; mediaItemId: MediaItemId }
   | { kind: 'file'; folder: FolderRefInput; filename: string }
   | { kind: 'sha256'; hash: string };
 
@@ -80,7 +81,7 @@ export class MediaRef {
   private constructor(private readonly addr: MediaAddressing) {}
 
   /** Reference a media item by its stable UUID. */
-  static id(uuid: string): MediaRef {
+  static id(uuid: MediaItemId): MediaRef {
     return new MediaRef({ kind: 'id', mediaItemId: uuid });
   }
 

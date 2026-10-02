@@ -1,8 +1,10 @@
+import type { PrincipalId } from "./auth";
+
 /** A repository audit-log entry (`GET /repos/{repoId}/changelog`). */
 export interface AuditLogEntry {
   id: number;
   /** `null` for system-attributed events. */
-  principalId: string | null;
+  principalId: PrincipalId | null;
   timestamp: string;
   /**
    * `type` is one of the audit event kinds (`repository_created`,

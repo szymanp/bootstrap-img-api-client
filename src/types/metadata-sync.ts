@@ -1,5 +1,5 @@
 import type { LanguageTag, Localized, Principal } from './common';
-import type { FolderReference, FolderType, MediaMembershipPatch, PermissionRecord } from './folders';
+import type { FolderId, FolderReference, FolderType, MediaMembershipPatch, PermissionRecord } from './folders';
 
 /** Body for `POST /repos/{repoId}/metadata-sync`'s `operations`. */
 export interface MetadataSyncPlan {
@@ -33,7 +33,7 @@ export interface RepositoryUpdateOperation {
 export interface FolderCreateOperation {
   op: 'folder.create';
   /** Required here, unlike `POST /folders/{repoId}` — lets other operations in the same plan reference it. */
-  id: string;
+  id: FolderId;
   /**
    * `{ id }` may name another `folder.create` in the same plan. A `{ path }`
    * is resolved against the repository as it was *before* the plan, so it
@@ -67,7 +67,7 @@ export interface FolderUpdateOperation {
    * `folder.update`/`folder.delete` per folder per plan, and never a folder
    * created in the same plan.
    */
-  folder: string;
+  folder: FolderId;
   expectedRevision: string;
   changes: FolderUpdateChanges;
 }
@@ -80,7 +80,7 @@ export interface FolderDeleteOperation {
    * subtree; no `folder.create`/`folder.update` in the same plan may place a
    * folder anywhere inside it (move folders out of it first).
    */
-  folder: string;
+  folder: FolderId;
   expectedRevision: string;
 }
 

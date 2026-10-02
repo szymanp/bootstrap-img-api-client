@@ -1,15 +1,19 @@
-import type { Effect, Localized, Permission, Principal } from './common';
+import type { Effect, Localized, Permission, Principal, UuidString } from './common';
 import type { Resource } from './envelope';
+import type { MediaItemId } from './media';
 
 /** Folder content kinds. */
 export type FolderType = 'root' | 'albums' | 'album' | 'document' | 'tag' | 'media' | 'media-source' | 'picture';
 
 /** A reference to a folder used inside JSON request bodies. */
-export type FolderReference = { id: string } | { path: string };
+export type FolderReference = { id: FolderId } | { path: string };
+
+/** An identifier of a folder. */
+export type FolderId = UuidString;
 
 /** A folder as returned in a resource envelope's `data`. */
 export interface Folder {
-  id: string;
+  id: FolderId;
   name?: string;
   path?: string;
   type?: FolderType;
@@ -38,7 +42,7 @@ export interface CreateFolderInput {
    * 
    * If not specified, an ID will be assigned by the server.
    */
-  id?: string;
+  id?: FolderId;
   parent: FolderReference;
   name: string;
   /**
@@ -88,13 +92,13 @@ export interface EffectivePermission {
    * The folder the grant is stored on — the folder itself for a direct grant,
    * an ancestor for an inherited one.
    */
-  folder: string;
+  folder: FolderId;
   permission: Permission;
 }
 
 /** A direct media-item membership entry on a folder. */
 export interface MediaMembership {
-  id: string;
+  id: MediaItemId;
   filename: string;
 }
 
@@ -128,7 +132,7 @@ export interface MediaMembershipQuery {
 
 /** A patch op applied to a folder's direct media membership. */
 export type MediaMembershipPatch =
-  | { op: 'add'; id: string; filename: string }
+  | { op: 'add'; id: MediaItemId; filename: string }
   | { op: 'remove'; filename: string }
   | {
       op: 'move';
@@ -144,7 +148,7 @@ export interface TextMediaRecord {
   /** Where the reference was found, e.g. `"text"` (more locations may be added later). */
   sourceLocation: string;
   targetKind: 'folder' | 'media';
-  targetId: string;
+  targetId: FolderId | MediaItemId;
   addressKind: 'by-id' | 'by-path';
   /** Whether the target currently exists, independent of the caller's read permissions. */
   status: 'resolved' | 'missing' | 'malformed';

@@ -1,7 +1,7 @@
 import type { Localized, Principal } from './common';
 import type { Resource } from './envelope';
-import type { EffectivePermission, FolderReference, FolderType, MediaMembership } from './folders';
-import type { MediaType, MediaVisibility } from './media';
+import type { EffectivePermission, FolderId, FolderReference, FolderType, MediaMembership } from './folders';
+import type { MediaItemId, MediaType, MediaVisibility } from './media';
 
 /** A named group of fields a metadata snapshot can include. */
 export type MetadataSnapshotAspect =
@@ -52,7 +52,7 @@ export interface RepositorySnapshotRecord {
 /** A folder record in a `Ready` snapshot. */
 export interface FolderSnapshotRecord {
   type: 'folder';
-  id: string;
+  id: FolderId;
   revision: string;
   /** `{ path: "/albums" }` when the *parent's* type is root/albums/media, else `{ id: "<uuid>" }`. */
   parent?: FolderReference;
@@ -76,7 +76,7 @@ export interface FolderSnapshotRecord {
 /** A media-item record in a `Ready` snapshot. */
 export interface MediaItemSnapshotRecord {
   type: 'media-item';
-  id: string;
+  id: MediaItemId;
   value: {
     type: MediaType | string;
     visibility: MediaVisibility;

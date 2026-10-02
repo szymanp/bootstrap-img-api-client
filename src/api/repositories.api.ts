@@ -3,7 +3,7 @@ import type { ReadOptions, WriteLanguageOptions } from '../types/common';
 import type { Collection, PageQuery, Resource } from '../types/envelope';
 import type { CreateMetadataSnapshotInput, MetadataSnapshotRecord } from '../types/metadata-snapshot';
 import type { MetadataSyncPlan } from '../types/metadata-sync';
-import type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from '../types/repositories';
+import type { CreateRepositoryInput, Repository, RepositoryId, UpdateRepositoryInput } from '../types/repositories';
 
 /** Repository endpoints. */
 export interface IRepositoriesApi {
@@ -33,7 +33,7 @@ export interface IRepositoriesApi {
    * @param options Field selector, representation, and `Accept-Language` override.
    * @returns The repository.
    */
-  get(repoId: string, options?: ReadOptions): Promise<RepositoryResource>;
+  get(repoId: RepositoryId, options?: ReadOptions): Promise<RepositoryResource>;
 
   /**
    * Retrieve a repository by name, optionally qualified by organization.
@@ -59,7 +59,7 @@ export interface IRepositoriesApi {
    * @returns The updated repository.
    */
   update(
-    repoId: string,
+    repoId: RepositoryId,
     revision: string,
     data: UpdateRepositoryInput,
     options?: WriteLanguageOptions,
@@ -72,7 +72,7 @@ export interface IRepositoriesApi {
    * @param revision The repository's current `meta.revision`.
    * @returns Resolves once the repository is deleted.
    */
-  delete(repoId: string, revision: string): Promise<void>;
+  delete(repoId: RepositoryId, revision: string): Promise<void>;
 
   /**
    * Retrieve a page of the repository's audit log, most recent first. The
@@ -82,7 +82,7 @@ export interface IRepositoriesApi {
    * @param query Pagination offset/limit.
    * @returns A page of audit-log entries, most recent first.
    */
-  getChangelog(repoId: string, query?: PageQuery): Promise<ChangelogCollection>;
+  getChangelog(repoId: RepositoryId, query?: PageQuery): Promise<ChangelogCollection>;
 
   /**
    * Start building a metadata snapshot — a point-in-time consistent read of
@@ -97,7 +97,7 @@ export interface IRepositoriesApi {
    * @returns The new snapshot's id and creation time.
    */
   createMetadataSnapshot(
-    repoId: string,
+    repoId: RepositoryId,
     input?: CreateMetadataSnapshotInput,
   ): Promise<CreateMetadataSnapshotResult>;
 
@@ -115,7 +115,7 @@ export interface IRepositoriesApi {
    * `{ status: 'ready', meta, records }` with a page of its records.
    */
   getMetadataSnapshot(
-    repoId: string,
+    repoId: RepositoryId,
     snapshotId: string,
     query?: MetadataSnapshotQuery,
   ): Promise<MetadataSnapshotResult>;
@@ -157,7 +157,7 @@ export interface IRepositoriesApi {
    * of each resource it mutated.
    */
   applyMetadataSync(
-    repoId: string,
+    repoId: RepositoryId,
     repositoryVersion: number,
     idempotencyKey: string,
     plan: MetadataSyncPlan,

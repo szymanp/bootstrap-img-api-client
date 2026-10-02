@@ -1,8 +1,11 @@
-import type { Localized, Principal } from './common';
+import type { Localized, Principal, UuidString } from './common';
+
+/** The identifier of a repository. */
+export type RepositoryId = UuidString;
 
 /** A repository as returned in a resource envelope's `data`. */
 export interface Repository {
-  id: string;
+  id: RepositoryId;
   name?: string;
   /** Single string in `standard` representation; all-languages object in `original`. */
   title?: Localized;

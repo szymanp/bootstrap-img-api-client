@@ -1,5 +1,8 @@
 /** Shared scalar/value types used across resources. */
 
+/** An alias for a string representing a UUID. */
+export type UuidString = string;
+
 /** A BCP-47 language tag (e.g. `en-US`). The server normalises to lowercase. */
 export type LanguageTag = string;
 

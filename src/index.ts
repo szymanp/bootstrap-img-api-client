@@ -97,10 +97,11 @@ export type {
   Principal,
   ReadOptions,
   Representation,
+  UuidString,
   WriteLanguageOptions,
 } from './types/common';
-export type { Session, SendTokenResult } from './types/auth';
-export type { CreateRepositoryInput, Repository, UpdateRepositoryInput } from './types/repositories';
+export type { PrincipalId, Session, SendTokenResult } from './types/auth';
+export type { CreateRepositoryInput, Repository, RepositoryId, UpdateRepositoryInput } from './types/repositories';
 export type { AuditLogEntry } from './types/changelog';
 export type {
   CreateMetadataSnapshotInput,
@@ -125,6 +126,7 @@ export type {
   CreateFolderInput,
   EffectivePermission,
   Folder,
+  FolderId,
   FolderReference,
   FolderRelated,
   FolderType,
@@ -145,6 +147,7 @@ export type {
   MediaDimensions,
   MediaEffectiveMetadata,
   MediaFormatInfo,
+  MediaItemId,
   MediaListOrderBy,
   MediaListQuery,
   MediaMetadata,

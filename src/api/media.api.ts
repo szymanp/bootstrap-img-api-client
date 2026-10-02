@@ -5,6 +5,7 @@ import type { Collection, HlsRenditionLink, MediaItemVariantLink, Resource } fro
 import type {
   BinaryBody,
   DownloadResult,
+  MediaItemId,
   MediaListQuery,
   MediaMetadata,
   MediaType,
@@ -37,7 +38,7 @@ export interface IMediaApi {
    * memory.
    */
   uploadById(
-    mediaItemId: string,
+    mediaItemId: MediaItemId,
     body: BinaryBody,
     contentType: string,
     options?: UploadByIdOptions,
@@ -56,7 +57,7 @@ export interface IMediaApi {
    *
    * {@link uploadById} with `claim: true` runs this whole flow.
    */
-  claimById(mediaItemId: string, sha256: Sha256Input, proof?: PossessionProof): Promise<UploadResult>;
+  claimById(mediaItemId: MediaItemId, sha256: Sha256Input, proof?: PossessionProof): Promise<UploadResult>;
 
   /**
    * Download a media binary. Returns `{ notModified: true }` when a conditional
