@@ -1,6 +1,6 @@
 /** User registration & profile types. */
 
-import type { UuidString } from './common';
+import type { LanguageTag, UuidString } from './common';
 
 /**
  * Body of `POST /users`. All fields are required; names are trimmed by the
@@ -10,6 +10,15 @@ export interface RegisterUserInput {
   email: string;
   firstName: string;
   lastName: string;
+}
+
+/** Options for endpoints that send the user an email. */
+export interface EmailLanguageOptions {
+  /**
+   * Per-call `Accept-Language` override; selects the language of the email
+   * sent to the user. Defaults to the client's `defaultLanguage`.
+   */
+  acceptLanguage?: LanguageTag;
 }
 
 /**

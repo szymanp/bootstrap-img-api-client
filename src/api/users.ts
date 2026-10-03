@@ -1,6 +1,6 @@
 import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
-import type { RegisterUserInput, UpdateUserInput, User } from '../types/users';
+import type { EmailLanguageOptions, RegisterUserInput, UpdateUserInput, User } from '../types/users';
 import type { IUsersApi } from './users.api';
 
 /** User registration, verification & profile endpoints. */
@@ -11,10 +11,11 @@ export class UsersApi implements IUsersApi {
   ) {}
 
   /** Register a new user and send a verification email. Always returns 204. */
-  async register(input: RegisterUserInput): Promise<void> {
+  async register(input: RegisterUserInput, options: EmailLanguageOptions = {}): Promise<void> {
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).createUser().href,
+      acceptLanguage: options.acceptLanguage,
       body: { kind: 'json', value: { email: input.email, firstName: input.firstName, lastName: input.lastName } },
       parse: parseVoid,
     });
@@ -31,10 +32,11 @@ export class UsersApi implements IUsersApi {
   }
 
   /** Resend the verification email. `userIdOrEmail` is a UUID or an email. */
-  async resendVerification(userIdOrEmail: string): Promise<void> {
+  async resendVerification(userIdOrEmail: string, options: EmailLanguageOptions = {}): Promise<void> {
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).resendVerificationToken(userIdOrEmail).href,
+      acceptLanguage: options.acceptLanguage,
       parse: parseVoid,
     });
   }

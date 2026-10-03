@@ -1,13 +1,14 @@
-import type { RegisterUserInput, UpdateUserInput, User } from '../types/users';
+import type { EmailLanguageOptions, RegisterUserInput, UpdateUserInput, User } from '../types/users';
 
 /** User registration, verification & profile endpoints. */
 export interface IUsersApi {
   /**
    * Register a new user and send a verification email. Always returns 204.
    * Throws `ApiError` (`ErrorType.ValidationFailed`) for a missing, blank,
-   * or too-long (> 255 chars) `firstName`/`lastName`.
+   * or too-long (> 255 chars) `firstName`/`lastName`. `options.acceptLanguage`
+   * selects the language of the verification email.
    */
-  register(input: RegisterUserInput): Promise<void>;
+  register(input: RegisterUserInput, options?: EmailLanguageOptions): Promise<void>;
 
   /**
    * Update a user's first and/or last name; omitted fields are left unchanged.
@@ -16,8 +17,11 @@ export interface IUsersApi {
    */
   update(userIdOrEmail: string, changes: UpdateUserInput): Promise<User>;
 
-  /** Resend the verification email. `userIdOrEmail` is a UUID or an email. */
-  resendVerification(userIdOrEmail: string): Promise<void>;
+  /**
+   * Resend the verification email. `userIdOrEmail` is a UUID or an email.
+   * `options.acceptLanguage` selects the language of the email.
+   */
+  resendVerification(userIdOrEmail: string, options?: EmailLanguageOptions): Promise<void>;
 
   /** Confirm email ownership with the token from the verification email. */
   verify(userIdOrEmail: string, token: string): Promise<void>;

@@ -101,7 +101,7 @@ export type {
   WriteLanguageOptions,
 } from './types/common';
 export type { PrincipalId, Session, SendTokenResult } from './types/auth';
-export type { RegisterUserInput, UpdateUserInput, User } from './types/users';
+export type { EmailLanguageOptions, RegisterUserInput, UpdateUserInput, User } from './types/users';
 export type { CreateRepositoryInput, Repository, RepositoryId, UpdateRepositoryInput } from './types/repositories';
 export type { AuditLogEntry } from './types/changelog';
 export type {

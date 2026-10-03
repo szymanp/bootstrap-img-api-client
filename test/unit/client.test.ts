@@ -98,6 +98,28 @@ describe('users', () => {
     expect(mock.last.url).toBe('http://localhost:8080/users');
     expect(mock.last.method).toBe('POST');
     expect(JSON.parse(mock.last.body!)).toEqual({ email: 'jan@example.com', firstName: 'Jan', lastName: 'Kowalski' });
+    expect(mock.last.headers.get('accept-language')).toBe('en-US');
+  });
+
+  it('registers with an Accept-Language override for the email', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    await client.users.register(
+      { email: 'jan@example.com', firstName: 'Jan', lastName: 'Kowalski' },
+      { acceptLanguage: 'pl-PL' },
+    );
+    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
+  });
+
+  it('resends verification with an Accept-Language override for the email', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    await client.users.resendVerification('jan@example.com', { acceptLanguage: 'pl-PL' });
+    expect(mock.last.url).toBe('http://localhost:8080/users/jan%40example.com/action;resend-verification-token');
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
   });
 
   it('updates a user profile and returns the user', async () => {
