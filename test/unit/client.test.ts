@@ -151,6 +151,28 @@ describe('repositories', () => {
     expect(JSON.parse(mock.last.body!)).toMatchObject({ data: { name: 'demo', title: 'Demo' } });
   });
 
+  it('re-reads a function defaultLanguage on every request', async () => {
+    const created = { status: 200, json: { meta: { revision: 'r1' }, data: { id: 'id1' }, links: {} } };
+    const mock = new MockFetch().enqueue(created, created);
+    let language = 'en-US';
+    const client = new BootstrapClient({
+      baseUrl: 'http://localhost:8080',
+      defaultLanguage: () => language,
+      fetch: mock.fetch,
+      credentials: new MemoryCookieStore(),
+      serviceRoot: serviceRootFixture,
+    });
+
+    await client.repos.create({ name: 'a', title: 'A' });
+    expect(mock.last.headers.get('accept-language')).toBe('en-US');
+    expect(mock.last.headers.get('content-language')).toBe('en-US');
+
+    language = 'pl-PL';
+    await client.repos.create({ name: 'b', title: 'B' });
+    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
+    expect(mock.last.headers.get('content-language')).toBe('pl-PL');
+  });
+
   it('passes fields and representation as query params on get', async () => {
     const mock = new MockFetch().enqueue({
       status: 200,

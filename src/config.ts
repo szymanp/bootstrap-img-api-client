@@ -12,8 +12,11 @@ export interface ClientOptions {
   /**
    * Default locale sent as `Accept-Language` (and `Content-Language` on writes)
    * when a call does not specify one. Defaults to `en-US`.
+   *
+   * Pass a function to resolve the locale lazily on every request — e.g. to follow
+   * a UI language switch in a web app without recreating the client.
    */
-  defaultLanguage?: LanguageTag;
+  defaultLanguage?: LanguageTag | (() => LanguageTag);
   /**
    * The `fetch` implementation to use. Defaults to `globalThis.fetch`. Inject a
    * mock for tests, or a polyfill on older runtimes.
@@ -36,7 +39,8 @@ export interface ClientOptions {
 
 export interface ResolvedConfig {
   baseUrl: string;
-  defaultLanguage: LanguageTag;
+  /** Resolves the current default locale; called on every request. */
+  defaultLanguage: () => LanguageTag;
   fetch: FetchLike;
   credentials: CredentialStore;
   defaultHeaders: Record<string, string>;
@@ -52,9 +56,10 @@ export function resolveConfig(options: ClientOptions, fallbackCredentials: () =>
       'No fetch implementation available. Pass `fetch` in ClientOptions or run on a platform with a global fetch.',
     );
   }
+  const language = options.defaultLanguage ?? DEFAULT_LANGUAGE;
   return {
     baseUrl: (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, ''),
-    defaultLanguage: options.defaultLanguage ?? DEFAULT_LANGUAGE,
+    defaultLanguage: typeof language === 'function' ? language : () => language,
     // Bind to preserve the global `this` (some runtimes require it).
     fetch: fetchImpl === globalThis.fetch ? fetchImpl.bind(globalThis) : fetchImpl,
     credentials: options.credentials ?? fallbackCredentials(),

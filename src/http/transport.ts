@@ -34,7 +34,7 @@ export class Transport {
 
   /** The configured default locale, used to default `Content-Language` on writes. */
   get defaultLanguage(): string {
-    return this.config.defaultLanguage;
+    return this.config.defaultLanguage();
   }
 
   async request<T>(spec: RequestSpec<T>): Promise<T> {
@@ -76,7 +76,7 @@ export class Transport {
     headers.set('accept', 'application/json');
     for (const [k, v] of Object.entries(this.config.defaultHeaders)) headers.set(k, v);
 
-    const acceptLang = spec.acceptLanguage === undefined ? this.config.defaultLanguage : spec.acceptLanguage;
+    const acceptLang = spec.acceptLanguage === undefined ? this.config.defaultLanguage() : spec.acceptLanguage;
     if (acceptLang) headers.set('accept-language', acceptLang);
 
     if (spec.contentLanguage !== undefined && spec.contentLanguage !== null) {

@@ -145,7 +145,7 @@ Every non-2xx (except an expected `304`) throws an `ApiError` carrying the parse
 ```ts
 new BootstrapClient({
   baseUrl: "http://localhost:8080", // default
-  defaultLanguage: "en-US",          // default Accept-/Content-Language
+  defaultLanguage: "en-US",          // default Accept-/Content-Language (or () => tag, read per request)
   fetch: globalThis.fetch,           // injectable (tests / polyfills)
   credentials: /* auto: browser vs Node */,
   defaultHeaders: {},                // added to every request
