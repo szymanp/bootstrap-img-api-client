@@ -37,3 +37,9 @@ export interface User {
   firstName: string;
   lastName: string;
 }
+
+/**
+ * A user's settings: an arbitrary JSON object owned by the client. The server
+ * stores it verbatim and never interprets it.
+ */
+export type UserSettings = Record<string, unknown>;

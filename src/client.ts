@@ -4,6 +4,8 @@ import { FoldersApi } from './api/folders';
 import type { IFoldersApi } from './api/folders.api';
 import { MediaApi } from './api/media';
 import type { IMediaApi } from './api/media.api';
+import { OrganizationsApi } from './api/organizations';
+import type { IOrganizationsApi } from './api/organizations.api';
 import { RepositoriesApi } from './api/repositories';
 import type { IRepositoriesApi } from './api/repositories.api';
 import { ServiceRootApi } from './api/service-root';
@@ -40,6 +42,7 @@ export class BootstrapClient {
   readonly auth: IAuthApi;
   readonly users: IUsersApi;
   readonly repos: IRepositoriesApi;
+  readonly orgs: IOrganizationsApi;
 
   /** Lazily resolves (and caches) the typed link builder from the service root. */
   private readonly links: LinksProvider;
@@ -55,6 +58,7 @@ export class BootstrapClient {
     this.auth = new AuthApi(this.transport, this.links);
     this.users = new UsersApi(this.transport, this.links);
     this.repos = new RepositoriesApi(this.transport, this.links);
+    this.orgs = new OrganizationsApi(this.transport, this.links);
   }
 
   /** Folder endpoints scoped to a repository. */

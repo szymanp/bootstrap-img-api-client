@@ -17,6 +17,11 @@ export interface Repository {
   owners?: Principal[];
   /** When present, wholesale-replaces the set of editors; `[]` clears them. */
   editors?: Principal[];
+  /**
+   * Name of the repository's organization; absent if it has none. Not
+   * returned by default — select it with `fields`.
+   */
+  organizationName?: string;
   [key: string]: unknown;
 }
 
@@ -24,12 +29,22 @@ export interface Repository {
 export interface CreateRepositoryInput {
   name: string;
   title: string;
+  /**
+   * Name of the organization to create the repository in; the caller must be
+   * a member (or owner) of it. Omit for a repository with no organization.
+   */
+  organization?: string;
 }
 
 /** Mutable fields for `POST /repos/{repoId}` (all optional — partial update; omitted fields are left unchanged). */
 export interface UpdateRepositoryInput {
   name?: string;
   title?: Localized;
+  /**
+   * Moves the repository into that organization; the caller must be a member
+   * (or owner) of it. A repository cannot be taken out of an organization.
+   */
+  organizationName?: string;
   owners?: Principal[];
   editors?: Principal[];
   [key: string]: unknown;

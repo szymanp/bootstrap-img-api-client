@@ -23,6 +23,8 @@ export interface RepositoryUpdateOperation {
   name?: string;
   /** A bare string is stored under the sync request's `Content-Language` (or the server default). */
   title?: Localized;
+  /** Moves the repository into that organization (the caller must be a member); it cannot be taken out of one. */
+  organizationName?: string;
   /** Wholesale-replaces the owners; `[]` fails the whole plan with `422` (`ErrorType.RepositoryWouldHaveNoOwners`). */
   owners?: Principal[];
   /** Wholesale-replaces the editors; `[]` clears them. */

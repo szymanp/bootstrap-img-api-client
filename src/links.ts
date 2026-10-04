@@ -53,6 +53,16 @@ export class ServiceLinks {
     return this.resolve('users:update', { userIdOrEmail: encode(userIdOrEmail) });
   }
 
+  /** `users:read-settings` — read a user's client-owned settings object. */
+  readUserSettings(userIdOrEmail: string): HrefLink {
+    return this.resolve('users:read-settings', { userIdOrEmail: encode(userIdOrEmail) });
+  }
+
+  /** `users:update-settings` — replace a user's client-owned settings object. */
+  updateUserSettings(userIdOrEmail: string): HrefLink {
+    return this.resolve('users:update-settings', { userIdOrEmail: encode(userIdOrEmail) });
+  }
+
   /** `users:verify-user` — verify a user's email. */
   verifyUser(userIdOrEmail: string): HrefLink {
     return this.resolve('users:verify-user', { userIdOrEmail: encode(userIdOrEmail) });
@@ -118,6 +128,43 @@ export class ServiceLinks {
   /** `repos:metadata-sync` — atomically apply a metadata-sync plan. */
   metadataSync(repoId: string): HrefLink {
     return this.resolve('repos:metadata-sync', { repoId: encode(repoId) });
+  }
+
+  // --- organizations ---
+
+  /** `orgs:list` — list organizations the caller holds a role in. */
+  listOrgs(): HrefLink {
+    return this.href('orgs:list');
+  }
+
+  /** `orgs:create` — create an organization. */
+  createOrg(): HrefLink {
+    return this.href('orgs:create');
+  }
+
+  /** `orgs:read` — retrieve an organization. */
+  readOrg(orgName: string): HrefLink {
+    return this.resolve('orgs:read', { orgName: encode(orgName) });
+  }
+
+  /** `orgs:update` — update an organization's title. */
+  updateOrg(orgName: string): HrefLink {
+    return this.resolve('orgs:update', { orgName: encode(orgName) });
+  }
+
+  /** `orgs:delete` — delete an empty organization. */
+  deleteOrg(orgName: string): HrefLink {
+    return this.resolve('orgs:delete', { orgName: encode(orgName) });
+  }
+
+  /** `orgs:list-members` — list an organization's members. */
+  listOrgMembers(orgName: string): HrefLink {
+    return this.resolve('orgs:list-members', { orgName: encode(orgName) });
+  }
+
+  /** `orgs:patch-members` — add, remove, or change the role of members. */
+  patchOrgMembers(orgName: string): HrefLink {
+    return this.resolve('orgs:patch-members', { orgName: encode(orgName) });
   }
 
   // --- folders ---

@@ -18,6 +18,12 @@ export type {
   MetadataSyncResult,
 } from './api/repositories.api';
 export type {
+  IOrganizationsApi,
+  OrganizationMembersCollection,
+  OrganizationResource,
+  OrganizationWriteOptions,
+} from './api/organizations.api';
+export type {
   IFoldersApi,
   FolderResource,
   FolderText,
@@ -101,8 +107,23 @@ export type {
   WriteLanguageOptions,
 } from './types/common';
 export type { PrincipalId, Session, SendTokenResult } from './types/auth';
-export type { EmailLanguageOptions, RegisterUserInput, UpdateUserInput, User } from './types/users';
+export type {
+  EmailLanguageOptions,
+  RegisterUserInput,
+  UpdateUserInput,
+  User,
+  UserSettings,
+} from './types/users';
 export type { CreateRepositoryInput, Repository, RepositoryId, UpdateRepositoryInput } from './types/repositories';
+export type {
+  CreateOrganizationInput,
+  Organization,
+  OrganizationMember,
+  OrganizationMemberPatch,
+  OrganizationName,
+  OrganizationRole,
+  UpdateOrganizationInput,
+} from './types/organizations';
 export type { AuditLogEntry } from './types/changelog';
 export type {
   CreateMetadataSnapshotInput,

@@ -28,6 +28,11 @@ export const ErrorType = {
   RepositoryNotFound: 'urn:bootstrap:error:repository-not-found',
   RepositoryNameConflict: 'urn:bootstrap:error:repository-name-conflict',
   RepositoryWouldHaveNoOwners: 'urn:bootstrap:error:repository-would-have-no-owners',
+  OrganizationNotFound: 'urn:bootstrap:error:organization-not-found',
+  OrganizationNameConflict: 'urn:bootstrap:error:organization-name-conflict',
+  /** `DELETE /orgs/{orgName}` while repositories still belong to the organization. */
+  OrganizationNotEmpty: 'urn:bootstrap:error:organization-not-empty',
+  OrganizationWouldHaveNoOwners: 'urn:bootstrap:error:organization-would-have-no-owners',
   FolderNotFound: 'urn:bootstrap:error:folder-not-found',
   ParentFolderNotFound: 'urn:bootstrap:error:parent-folder-not-found',
   FolderAlreadyExists: 'urn:bootstrap:error:folder-already-exists',

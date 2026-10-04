@@ -24,7 +24,7 @@ Authentication is **cookie-based**. The flow:
 3. The client must **store that `session` cookie and send it on every subsequent request** that requires authentication. A standard cookie jar handles this automatically.
 4. `POST /auth/action;logout` terminates the session; the response clears the cookie (`session=` with `Max-Age=0`).
 
-`GET /auth/session` reports the current session, or `401` if the cookie is missing/expired/invalid. Endpoints that require a session respond `401 Unauthorized` (with `WWW-Authenticate: Cookie`) when none is present, and `403 Forbidden` when the session is valid but lacks permission. User registration/verification and `auth:*` endpoints are the only ones reachable without a session.
+`GET /auth/session` reports the current session, or `401` if the cookie is missing/expired/invalid. Verifying a newly registered user (`POST /users/{userIdOrEmail}/action;verify-user`) also starts a session and sets the cookie, as in step 2. Endpoints that require a session respond `401 Unauthorized` (with `WWW-Authenticate: Cookie`) when none is present, and `403 Forbidden` when the session is valid but lacks permission. User registration/verification and `auth:*` endpoints are the only ones reachable without a session.
 
 ### Resource envelope
 
@@ -57,6 +57,8 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
 | `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
 | `urn:bootstrap:error:repository-would-have-no-owners` | 422 |
+| `urn:bootstrap:error:organization-not-found` / `:organization-name-conflict` / `:organization-not-empty` | 404 / 409 / 409 |
+| `urn:bootstrap:error:organization-would-have-no-owners` | 422 |
 | `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` / `:folder-already-exists` / `:folder-path-conflict` | 404 / 409 |
 | `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
 | `urn:bootstrap:error:media-variant-not-ready` | 404 |
@@ -122,6 +124,18 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `repos:metadata-snapshot-read` | template | `GET /repos/{repoId}/metadata-snapshots/{snapshotId}` |
 | `repos:metadata-sync` | template | `POST /repos/{repoId}/metadata-sync` |
 
+##### Organizations
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `orgs:list` | href | `GET /orgs` |
+| `orgs:create` | href | `POST /orgs` |
+| `orgs:read` | template | `GET /orgs/{orgName}` |
+| `orgs:update` | template | `POST /orgs/{orgName}` |
+| `orgs:delete` | template | `DELETE /orgs/{orgName}` |
+| `orgs:list-members` | template | `GET /orgs/{orgName}/members` |
+| `orgs:patch-members` | template | `PATCH /orgs/{orgName}/members` |
+
 ##### Folders
 
 | `rel` | Kind | Method & target |
@@ -170,6 +184,8 @@ variant URLs are discovered today rather than built from a root template.
 | --- | --- | --- |
 | `users:create` | href | `POST /users` |
 | `users:update` | template | `POST /users/{userIdOrEmail}` |
+| `users:read-settings` | template | `GET /users/{userIdOrEmail}/settings` |
+| `users:update-settings` | template | `PUT /users/{userIdOrEmail}/settings` |
 | `users:resend-verification-token` | template | `POST /users/{userIdOrEmail}/action;resend-verification-token` |
 | `users:verify-user` | template | `POST /users/{userIdOrEmail}/action;verify-user` |
 
@@ -308,6 +324,46 @@ longer than 255 characters is rejected. Names are trimmed.
 
 ---
 
+### GET /users/{userIdOrEmail}/settings
+
+Returns the user's settings: an arbitrary JSON object owned by the client (the webapp). The server stores it verbatim
+and never interprets it. A user who has never stored settings gets `{}`. Only the user themselves may read their
+settings: the request must carry that user's session.
+
+#### Response body
+
+```json
+{ "theme": "dark", "grid": { "columns": 4 } }
+```
+
+#### Responses
+
+- `200 OK`
+- `401 Unauthorized` — no session
+- `403 Forbidden` — the session belongs to a different user
+- `404 Not Found` — no such user
+
+---
+
+### PUT /users/{userIdOrEmail}/settings
+
+Replaces the user's settings object wholesale (no key-level merge). There is no revision or optimistic-concurrency
+check: the last write wins. Only the user themselves may write their settings.
+
+#### Request body
+
+Any JSON object (`Content-Type: application/json`). Arrays, scalars, and `null` are rejected.
+
+#### Responses
+
+- `204 No Content`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — the body is not a JSON object
+- `401 Unauthorized` — no session
+- `403 Forbidden` — the session belongs to a different user
+- `404 Not Found` — no such user
+
+---
+
 ### POST /users/{userIdOrEmail}/action;resend-verification-token
 
 Resends the verification email. `userIdOrEmail` is a UUID or an email address.
@@ -320,7 +376,9 @@ Resends the verification email. `userIdOrEmail` is a UUID or an email address.
 
 ### POST /users/{userIdOrEmail}/action;verify-user
 
-Confirms email ownership using the token from the verification email, activating the account.
+Confirms email ownership using the token from the verification email, activating the account, and logs the user in:
+like `POST /auth`, it starts a session and sets the `session` cookie (`Set-Cookie: session=<opaque>; Path=/`), so
+no separate token login is needed after registration.
 
 #### Request body
 
@@ -330,7 +388,10 @@ Confirms email ownership using the token from the verification email, activating
 
 #### Responses
 
-- `204 No Content`
+- `204 No Content` — user verified, session started
+- `404 Not Found` — no such user
+- `409 Conflict` — user already verified
+- `422 Unprocessable Entity` — wrong or expired token, or no pending verification token
 
 ---
 
@@ -348,16 +409,22 @@ Creates a repository. `Content-Language` header is required; the title is stored
 {
   "data": {
     "name": "my-repo",
-    "title": "My Repository"
+    "title": "My Repository",
+    "organization": "my-org"
   }
 }
 ```
+
+The repository may be created in an [organization](#organizations), given by name (`organization`). The caller must
+be a member (or owner) of that organization. Without it, the repository belongs to no organization.
 
 #### Responses
 
 - `200 OK` — `{ "meta": { "revision": "…" }, "data": { "id": "…", "name": "…", "title": "…" }, "links": { "self": "…" } }`
 - `400 Bad Request` — missing `Content-Language`
-- `409 Conflict` — name already taken
+- `403 Forbidden` — the caller is not a member of the organization
+- `404 Not Found` (`urn:bootstrap:error:organization-not-found`) — no such organization
+- `409 Conflict` — name already taken (within the organization)
 
 ---
 
@@ -385,7 +452,8 @@ Retrieves a repository.
 
 #### Query parameters
 
-- `fields` (optional) — comma-separated field selector
+- `fields` (optional) — comma-separated field selector. Besides the default `name`, `title`, `owners`, and `editors`,
+  `organizationName` (the name of the repository's organization, absent if it has none) can be selected.
 - `representation` (optional) — `standard` (default) or `original`
 
 The `representation` parameter selects how the repository is rendered:
@@ -402,7 +470,8 @@ The `representation` parameter selects how the repository is rendered:
 
 ### GET /repos?org=organizationName&name=repositoryName
 
-Retrieves a repository by its name (`name`). The repository name can optionally qualified with an organization name (`org`).
+Retrieves a repository by its name (`name`). The repository name can optionally be qualified with an organization
+name (`org`); organization names are case-insensitive.
 
 This request accepts the same additional query parameters as `GET /repos/{repoId}` and returns the same responses.
 
@@ -422,6 +491,7 @@ not just to `owners`/`editors` changes.
   "data": {
     "name": "new-name",
     "title": "New Title",
+    "organizationName": "my-org",
     "owners": [ { "type": "user", "email": "owner@example.com" } ],
     "editors": [ { "type": "user", "email": "editor@example.com" } ]
   }
@@ -433,6 +503,8 @@ All fields under `data` are optional:
 - `name` — renames the repository.
 - `title` — as in `POST /repos` (bare string stores under `Content-Language`, merging with existing translations;
   an object replaces every stored translation).
+- `organizationName` — moves the repository into that [organization](#organizations). The caller must be a member
+  (or owner) of it. A repository cannot be taken out of an organization.
 - `owners` / `editors` — each, when present, **wholesale-replaces** the current set of principals holding that role:
   principals missing from the list are removed, listed principals not currently holding the role are added.
   Principal shape is the same `{ "type": "user"/"anonymous"/"link", ... }` form used by
@@ -445,7 +517,9 @@ All fields under `data` are optional:
 
 - `200 OK` — returns an updated repository resource
 - `404 Not Found`
-- `409 Conflict` — revision mismatch or name already taken
+- `403 Forbidden` — the caller is not a member of the `organizationName` organization
+- `404 Not Found` (`urn:bootstrap:error:organization-not-found`) — no such organization
+- `409 Conflict` — revision mismatch, or the name is already taken (within the target organization)
 - `422 Unprocessable Entity` — `owners` supplied as an empty list
 
 ---
@@ -506,6 +580,189 @@ fields.
 - `200 OK`
 - `403 Forbidden` — caller is not an owner or editor of the repository
 - `404 Not Found`
+
+---
+
+## Organizations
+
+An organization qualifies repository names (`GET /repos?org=…&name=…`) and groups the users allowed to create
+repositories in it. A user holds one of two roles in an organization:
+
+- `owner` — manages the organization: updates or deletes it and adds or removes members and owners;
+- `member` — may create repositories in the organization.
+
+An owner is also a member. Only users hold roles (no link or anonymous principals). An organization always has at least
+one owner.
+
+Organizations are addressed by name. A name is a URL-safe slug: letters, digits, and hyphens, not starting or ending
+with a hyphen, at most 60 characters. Names are case-insensitive: they are stored and returned in lowercase, and
+`/orgs/My-Org` addresses `my-org`. A name cannot be changed after creation.
+
+The organization resource has `id`, `name`, and `title`. `title` is localized like a repository's: in a request, a
+bare string is stored under `Content-Language` and an object sets every translation; in a response, it is the
+translation negotiated for `Accept-Language` (or every translation with `?representation=original`). Organizations
+have no revision.
+
+```json
+{
+  "meta": {},
+  "data": { "id": "<uuid>", "name": "my-org", "title": "My Organization" },
+  "links": {
+    "self": { "rel": "self", "href": "/orgs/my-org" },
+    "members": { "rel": "members", "href": "/orgs/my-org/members" }
+  }
+}
+```
+
+### GET /orgs
+
+Lists the organizations in which the caller holds any role, ordered by name. Not paginated.
+
+#### Response body
+
+```json
+{ "meta": {}, "records": [ { "meta": {}, "data": { "id": "…", "name": "my-org", "title": "…" }, "links": { … } } ] }
+```
+
+#### Responses
+
+- `200 OK`
+- `401 Unauthorized` — no session
+
+---
+
+### POST /orgs
+
+Creates an organization and makes the caller its owner. Any verified user may create one. `Content-Language` is
+required.
+
+#### Request body
+
+```json
+{ "data": { "name": "my-org", "title": "My Organization" } }
+```
+
+#### Responses
+
+- `200 OK` — organization resource
+- `400 Bad Request` — missing `Content-Language`, or an invalid `name`
+- `401 Unauthorized` — no session
+- `409 Conflict` (`urn:bootstrap:error:organization-name-conflict`) — the name is taken (compared case-insensitively)
+
+---
+
+### GET /orgs/{orgName}
+
+Retrieves an organization by name. Requires no session and no role.
+
+#### Query parameters
+
+- `fields` (optional) — comma-separated field selector
+- `representation` (optional) — `standard` (default) or `original`, as for `GET /repos/{repoId}`
+
+#### Responses
+
+- `200 OK` — organization resource
+- `404 Not Found` (`urn:bootstrap:error:organization-not-found`)
+
+---
+
+### POST /orgs/{orgName}
+
+Updates an organization's title. Requires the **owner** role. No revision is needed.
+
+#### Request body
+
+```json
+{ "data": { "title": "New Title" } }
+```
+
+`title` is optional; as with repositories, a bare string is merged into the existing translations under
+`Content-Language`, and an object replaces every translation. The name cannot be changed: a `name` field is accepted
+only if it equals the current name.
+
+#### Responses
+
+- `200 OK` — updated organization resource
+- `400 Bad Request` — `name` differs from the current name
+- `401 Unauthorized` — no session
+- `403 Forbidden` — the caller is not an owner
+- `404 Not Found`
+
+---
+
+### DELETE /orgs/{orgName}
+
+Deletes an organization. Requires the **owner** role, and the organization must not contain any repositories.
+
+#### Responses
+
+- `204 No Content`
+- `401 Unauthorized` — no session
+- `403 Forbidden` — the caller is not an owner
+- `404 Not Found`
+- `409 Conflict` (`urn:bootstrap:error:organization-not-empty`) — repositories still belong to the organization
+
+---
+
+### GET /orgs/{orgName}/members
+
+Lists the organization's members (owners included), ordered by email. Requires the **member** role. Not paginated.
+
+#### Response body
+
+```json
+{
+  "meta": {},
+  "records": [
+    { "data": { "email": "member@example.com", "role": "member" } },
+    { "data": { "email": "owner@example.com", "role": "owner" } }
+  ]
+}
+```
+
+`role` is `owner` or `member`. Each user appears once, with the role they hold.
+
+#### Responses
+
+- `200 OK`
+- `401 Unauthorized` — no session
+- `403 Forbidden` — the caller is not a member
+- `404 Not Found`
+
+---
+
+### PATCH /orgs/{orgName}/members
+
+Applies an ordered list of operations to the organization's members in a single transaction, and returns the resulting
+member list (same shape as `GET`). Requires the **owner** role.
+
+| Form | Effect |
+| --- | --- |
+| `{ "op": "add", "email": "<email>", "role": "owner" \| "member" }` | Gives the user that role, adding them or changing the role they hold. `role` defaults to `member`. |
+| `{ "op": "remove", "email": "<email>" }` | Removes the user from the organization. No-op if they are not a member. |
+
+An owner may remove themselves or demote themselves to `member`, but the organization must keep at least one owner:
+a request that would leave it without one is rejected, and none of its operations is applied.
+
+#### Request body
+
+```json
+[
+  { "op": "add", "email": "new-owner@example.com", "role": "owner" },
+  { "op": "remove", "email": "old-owner@example.com" }
+]
+```
+
+#### Responses
+
+- `200 OK` — resulting member list
+- `400 Bad Request` — an invalid operation
+- `401 Unauthorized` — no session
+- `403 Forbidden` — the caller is not an owner
+- `404 Not Found` — no such organization (`organization-not-found`), or an email with no registered user
+  (`user-not-found`)
+- `422 Unprocessable Entity` (`urn:bootstrap:error:organization-would-have-no-owners`)
 
 ---
 
@@ -673,7 +930,7 @@ Each entry in `operations` is a JSON object with a top-level `"op"` discriminato
 
 | `op` | Fields | Mirrors |
 | --- | --- | --- |
-| `repository.update` | `expectedRevision`, plus `name`/`title`/`owners`/`editors` (same shape as `POST /repos/{repoId}`) | `POST /repos/{repoId}` |
+| `repository.update` | `expectedRevision`, plus `name`/`title`/`organizationName`/`owners`/`editors` (same shape as `POST /repos/{repoId}`) | `POST /repos/{repoId}` |
 | `folder.create` | `id` (**required** here, unlike the single-resource endpoint), `parent`, `name`, `title`, `type`, `data` (same shape as `POST /folders/{repoId}`) | `POST /folders/{repoId}` |
 | `folder.update` | `folder` (bare UUID string), `expectedRevision`, `changes: { name?, parent?, title?, data?, texts?, permissions?, media? }` | `POST /folders/{repoId}/{folderIdOrPath}` + its `text`/`permissions`/`media` subresources |
 | `folder.delete` | `folder` (bare UUID string), `expectedRevision` | `DELETE /folders/{repoId}/{folderIdOrPath}` |

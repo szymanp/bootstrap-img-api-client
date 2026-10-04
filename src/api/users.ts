@@ -1,6 +1,6 @@
 import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
-import type { EmailLanguageOptions, RegisterUserInput, UpdateUserInput, User } from '../types/users';
+import type { EmailLanguageOptions, RegisterUserInput, UpdateUserInput, User, UserSettings } from '../types/users';
 import type { IUsersApi } from './users.api';
 
 /** User registration, verification & profile endpoints. */
@@ -31,6 +31,25 @@ export class UsersApi implements IUsersApi {
     });
   }
 
+  /** Read the user's client-owned settings object (`{}` if never stored). */
+  async getSettings<T extends object = UserSettings>(userIdOrEmail: string): Promise<T> {
+    return this.transport.request({
+      method: 'GET',
+      path: (await this.links()).readUserSettings(userIdOrEmail).href,
+      parse: parseJson<T>,
+    });
+  }
+
+  /** Replace the user's settings object wholesale (last write wins). */
+  async putSettings(userIdOrEmail: string, settings: object): Promise<void> {
+    return this.transport.request({
+      method: 'PUT',
+      path: (await this.links()).updateUserSettings(userIdOrEmail).href,
+      body: { kind: 'json', value: settings },
+      parse: parseVoid,
+    });
+  }
+
   /** Resend the verification email. `userIdOrEmail` is a UUID or an email. */
   async resendVerification(userIdOrEmail: string, options: EmailLanguageOptions = {}): Promise<void> {
     return this.transport.request({
@@ -41,7 +60,10 @@ export class UsersApi implements IUsersApi {
     });
   }
 
-  /** Confirm email ownership with the token from the verification email. */
+  /**
+   * Confirm email ownership with the token from the verification email. Also
+   * starts a session; the session cookie is captured automatically.
+   */
   async verify(userIdOrEmail: string, token: string): Promise<void> {
     return this.transport.request({
       method: 'POST',

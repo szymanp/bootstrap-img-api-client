@@ -99,6 +99,23 @@ export const serviceRootFixture: ServiceRoot = {
       fields: ['repoId', 'folderIdOrPath', 'filename'],
     },
     'repos:create': { rel: 'repos:create', href: '/repos' },
+    'orgs:list': { rel: 'orgs:list', href: '/orgs' },
+    'orgs:create': { rel: 'orgs:create', href: '/orgs' },
+    'orgs:read': { rel: 'orgs:read', template: '/orgs/{orgName}', fields: ['orgName'] },
+    'orgs:update': { rel: 'orgs:update', template: '/orgs/{orgName}', fields: ['orgName'] },
+    'orgs:delete': { rel: 'orgs:delete', template: '/orgs/{orgName}', fields: ['orgName'] },
+    'orgs:list-members': { rel: 'orgs:list-members', template: '/orgs/{orgName}/members', fields: ['orgName'] },
+    'orgs:patch-members': { rel: 'orgs:patch-members', template: '/orgs/{orgName}/members', fields: ['orgName'] },
+    'users:read-settings': {
+      rel: 'users:read-settings',
+      template: '/users/{userIdOrEmail}/settings',
+      fields: ['userIdOrEmail'],
+    },
+    'users:update-settings': {
+      rel: 'users:update-settings',
+      template: '/users/{userIdOrEmail}/settings',
+      fields: ['userIdOrEmail'],
+    },
     'repos:changelog': {
       rel: 'repos:changelog',
       template: '/repos/{repoId}/changelog',

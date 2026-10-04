@@ -122,6 +122,23 @@ describe('users', () => {
     expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
   });
 
+  it('verifies with the token and captures the session cookie it sets', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 204,
+      headers: { 'set-cookie': 'session=opaque; Path=/' },
+    });
+    const credentials = new MemoryCookieStore();
+    const client = makeClient(mock, credentials);
+
+    await client.users.verify('jan@example.com', 'tok-123');
+    expect(mock.last.url).toBe('http://localhost:8080/users/jan%40example.com/action;verify-user');
+    expect(JSON.parse(mock.last.body!)).toEqual({ token: 'tok-123' });
+
+    const headers = new Headers();
+    credentials.decorate(headers);
+    expect(headers.get('cookie')).toBe('session=opaque');
+  });
+
   it('updates a user profile and returns the user', async () => {
     const user = { id: 'u1', email: 'jan@example.com', firstName: 'Janek', lastName: 'Kowalski' };
     const mock = new MockFetch().enqueue({ status: 200, json: user });
@@ -132,6 +149,117 @@ describe('users', () => {
     expect(mock.last.url).toBe('http://localhost:8080/users/jan%40example.com');
     expect(mock.last.method).toBe('POST');
     expect(JSON.parse(mock.last.body!)).toEqual({ firstName: 'Janek' });
+  });
+});
+
+describe('user settings', () => {
+  it('reads settings with GET', async () => {
+    const settings = { theme: 'dark', grid: { columns: 4 } };
+    const mock = new MockFetch().enqueue({ status: 200, json: settings });
+    const client = makeClient(mock);
+
+    const result = await client.users.getSettings<{ theme: string }>('jan@example.com');
+    expect(result).toEqual(settings);
+    expect(mock.last.url).toBe('http://localhost:8080/users/jan%40example.com/settings');
+    expect(mock.last.method).toBe('GET');
+  });
+
+  it('replaces settings with PUT and a bare JSON object body', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    await client.users.putSettings('jan@example.com', { theme: 'light' });
+    expect(mock.last.url).toBe('http://localhost:8080/users/jan%40example.com/settings');
+    expect(mock.last.method).toBe('PUT');
+    expect(mock.last.headers.get('content-type')).toContain('application/json');
+    expect(JSON.parse(mock.last.body!)).toEqual({ theme: 'light' });
+  });
+});
+
+describe('organizations', () => {
+  const org = { meta: {}, data: { id: 'o1', name: 'my-org', title: 'My Org' }, links: {} };
+
+  it('lists organizations with GET /orgs', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { meta: {}, records: [org] } });
+    const client = makeClient(mock);
+
+    const result = await client.orgs.list();
+    expect(result.records[0]?.data.name).toBe('my-org');
+    expect(mock.last.url).toBe('http://localhost:8080/orgs');
+    expect(mock.last.method).toBe('GET');
+  });
+
+  it('creates with the default Content-Language and a data envelope', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: org });
+    const client = makeClient(mock);
+
+    await client.orgs.create({ name: 'my-org', title: 'My Org' });
+    expect(mock.last.url).toBe('http://localhost:8080/orgs');
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.headers.get('content-language')).toBe('en-US');
+    expect(JSON.parse(mock.last.body!)).toEqual({ data: { name: 'my-org', title: 'My Org' } });
+  });
+
+  it('reads by name with fields and representation', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: org });
+    const client = makeClient(mock);
+
+    await client.orgs.get('My-Org', { representation: 'original', fields: ['name', 'title'] });
+    const url = new URL(mock.last.url);
+    expect(url.pathname).toBe('/orgs/My-Org');
+    expect(url.searchParams.get('representation')).toBe('original');
+    expect(url.searchParams.get('fields')).toBe('name,title');
+  });
+
+  it('updates the title with POST and a Content-Language override', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: org });
+    const client = makeClient(mock);
+
+    await client.orgs.update('my-org', { title: 'Moja organizacja' }, { contentLanguage: 'pl-PL' });
+    expect(mock.last.url).toBe('http://localhost:8080/orgs/my-org');
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.headers.get('content-language')).toBe('pl-PL');
+    expect(JSON.parse(mock.last.body!)).toEqual({ data: { title: 'Moja organizacja' } });
+  });
+
+  it('deletes and surfaces organization-not-empty as a typed ApiError', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 409,
+      headers: { 'content-type': 'application/problem+json' },
+      body: JSON.stringify({ type: ErrorType.OrganizationNotEmpty, status: 409 }),
+    });
+    const client = makeClient(mock);
+
+    const err = await client.orgs.delete('my-org').catch((e: unknown) => e);
+    expect(isApiError(err, ErrorType.OrganizationNotEmpty)).toBe(true);
+    expect(mock.last.url).toBe('http://localhost:8080/orgs/my-org');
+    expect(mock.last.method).toBe('DELETE');
+  });
+
+  it('lists and patches members', async () => {
+    const members = {
+      meta: {},
+      records: [
+        { data: { email: 'member@example.com', role: 'member' } },
+        { data: { email: 'owner@example.com', role: 'owner' } },
+      ],
+    };
+    const mock = new MockFetch().enqueue({ status: 200, json: members }, { status: 200, json: members });
+    const client = makeClient(mock);
+
+    const listed = await client.orgs.getMembers('my-org');
+    expect(listed.records.map((r) => r.data.role)).toEqual(['member', 'owner']);
+    expect(mock.last.url).toBe('http://localhost:8080/orgs/my-org/members');
+    expect(mock.last.method).toBe('GET');
+
+    const patch = [
+      { op: 'add', email: 'owner@example.com', role: 'owner' },
+      { op: 'remove', email: 'old@example.com' },
+    ] as const;
+    await client.orgs.patchMembers('my-org', [...patch]);
+    expect(mock.last.method).toBe('PATCH');
+    expect(mock.last.url).toBe('http://localhost:8080/orgs/my-org/members');
+    expect(JSON.parse(mock.last.body!)).toEqual(patch);
   });
 });
 
@@ -149,6 +277,21 @@ describe('repositories', () => {
     expect(mock.last.headers.get('accept-language')).toBe('en-US');
     expect(mock.last.headers.get('content-language')).toBe('en-US');
     expect(JSON.parse(mock.last.body!)).toMatchObject({ data: { name: 'demo', title: 'Demo' } });
+  });
+
+  it('creates in an organization and moves one into it on update', async () => {
+    const repo = { status: 200, json: { meta: { revision: 'r1' }, data: { id: 'id1' }, links: {} } };
+    const mock = new MockFetch().enqueue(repo, repo);
+    const client = makeClient(mock);
+
+    await client.repos.create({ name: 'demo', title: 'Demo', organization: 'my-org' });
+    expect(JSON.parse(mock.last.body!)).toMatchObject({ data: { organization: 'my-org' } });
+
+    await client.repos.update('id1', 'r1', { organizationName: 'other-org' });
+    expect(JSON.parse(mock.last.body!)).toMatchObject({
+      meta: { revision: 'r1' },
+      data: { organizationName: 'other-org' },
+    });
   });
 
   it('re-reads a function defaultLanguage on every request', async () => {

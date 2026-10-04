@@ -50,13 +50,13 @@ Layered, with a thin low-level transport under typed resource APIs:
 - `src/types/` — envelopes (`Resource`, `Collection`, `Meta`, `Link`/`LinkSet`),
   common scalars (`Principal`, `Permission`, `Localized`, `ReadOptions`,
   `WriteLanguageOptions`), and per-resource payload types.
-- `src/api/` — one class per resource group (`auth`, `users`, `repositories`,
+- `src/api/` — one class per resource group (`auth`, `users`, `repositories`, `organizations`,
   `folders`, `media`, `service-root`). Folders/media are repo-scoped and constructed
   with `(transport, repoId)`. Each class implements an `I*Api` interface declared in a
   sibling `*.api.ts` file (e.g. `auth.ts` → `auth.api.ts`'s `IAuthApi`); the interface
   is the user-facing type, and the shared payload/result types (`FolderResource`,
   `PutTextResult`, etc.) live in the `.api.ts` file alongside it.
-- `src/client.ts` — `BootstrapClient` wires it together: `auth`, `users`, `repos`,
+- `src/client.ts` — `BootstrapClient` wires it together: `auth`, `users`, `repos`, `orgs`,
   `serviceRoot` properties plus `folders(repoId)` / `media(repoId)` factories, all typed
   as the `I*Api` interfaces rather than the concrete classes.
 - `src/index.ts` — the public barrel; the only entry point consumers import from. It
