@@ -11,6 +11,10 @@ export interface AuditLogEntry {
    * `repository_renamed`, `repository_title_changed`, `owner_added`/
    * `owner_removed`, `editor_added`/`editor_removed`, or one of the
    * `folder_*` events); `data` carries that event's own fields.
+   *
+   * `repository_renamed` covers a change of name, organization, or both, with
+   * data `{ oldOrganization?, oldName, newOrganization?, newName }` (an
+   * organization field is absent when there was/is none).
    */
   description: { type: string; data: Record<string, unknown> };
 }

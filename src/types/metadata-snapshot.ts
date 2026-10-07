@@ -47,6 +47,8 @@ export interface RepositorySnapshotRecord {
   type: 'repository';
   revision: string;
   value: {
+    /** Absent when the repository has no organization — the shape `repository.update` takes. */
+    organizationName?: string;
     name: string;
     title: Localized;
     owners: Principal[];

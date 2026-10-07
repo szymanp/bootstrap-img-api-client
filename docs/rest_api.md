@@ -577,6 +577,11 @@ repository owner or editor.
 `editor_added`/`editor_removed`, or one of the `folder_*` events); `description.data` carries that event's own
 fields.
 
+`repository_renamed` records a change of the repository's qualified name: its `name`, its organization, or both, as
+one entry. Its data is `{ "oldOrganization", "oldName", "newOrganization", "newName" }`, where an organization field
+is absent when the repository had or has no organization. A move into an organization therefore has
+`oldName == newName`.
+
 #### Responses
 
 - `200 OK`
@@ -839,6 +844,8 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
       "type": "repository",
       "revision": "…",
       "value": {
+        // absent when the repository has no organization; the shape repository.update takes
+        "organizationName": "my-org",
         "name": "…",
         "title": { "pl-pl": "…" },
         "owners": [ { "type": "user", "email": "owner@example.com" } ],
@@ -1156,7 +1163,7 @@ Folder `links` includes a `text` link pointing at the text subresource. When any
 "text": { "rel": "text", "href": "…/text", "language": ["en-us", "pl-pl"] }
 ```
 
-#### Cover, date range, and item count
+### Cover, date range, and item count
 
 Folder `data` also carries a summary of everything the folder exposes: its own media items and those of all its
 subfolders (see [folder_summary_plan.md](folder_summary_plan.md)).
