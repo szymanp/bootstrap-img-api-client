@@ -664,6 +664,20 @@ describe('folders', () => {
     expect(JSON.parse(mock.last.body!)).toEqual({ query: { limit: 5 } });
   });
 
+  it('sends depth on action;list, including null for the whole subtree', async () => {
+    const mock = new MockFetch()
+      .enqueue({ status: 200, json: { meta: { offset: 0, limit: 20, depth: null }, records: [] } })
+      .enqueue({ status: 200, json: { meta: { offset: null, limit: null, depth: 2 }, records: [] } });
+    const client = makeClient(mock);
+
+    const all = await client.folders('repo1').list({ path: '/albums' }, { depth: null, offset: 0, limit: 20 });
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { depth: null, offset: 0, limit: 20 } });
+    expect(all.meta.depth).toBeNull();
+
+    await client.folders('repo1').list({ path: '/albums' }, { depth: 2 });
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { depth: 2 } });
+  });
+
   it('sends cover and dateRange in the update body, including null to reset', async () => {
     const mock = new MockFetch().enqueue({
       status: 200,
@@ -760,6 +774,25 @@ describe('folders', () => {
     });
     expect(result.records[0]?.data).toEqual({ id: 'm1', filename: 'first.JPG' });
     expect(result.related?.mediaitem?.[0]?.data.id).toBe('m1');
+  });
+
+  it('queries media membership relative to a filename, then continues from a cursor', async () => {
+    const mock = new MockFetch()
+      .enqueue({ status: 200, json: { meta: { offset: -5, limit: 10, next: 'c-next' }, records: [] } })
+      .enqueue({ status: 200, json: { meta: { limit: 10 }, records: [] } });
+    const client = makeClient(mock);
+    const folders = client.folders('repo1');
+
+    const first = await folders.queryMedia(
+      { path: '/albums' },
+      { relativeTo: { filename: 'IMG_1234.jpg' }, offset: -5, limit: 10 },
+    );
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      query: { relativeTo: { filename: 'IMG_1234.jpg' }, offset: -5, limit: 10 },
+    });
+
+    await folders.queryMedia({ path: '/albums' }, { cursor: first.meta.next!, limit: 10, fields: ['type'] });
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { cursor: 'c-next', limit: 10 }, fields: 'type' });
   });
 
   it('reads text with the Revision-Id and Content-Language headers', async () => {
@@ -970,22 +1003,52 @@ describe('media', () => {
     });
   });
 
-  it('passes a keyset offset and short order alias through on action;list', async () => {
-    const mock = new MockFetch().enqueue({ status: 200, json: { meta: { offset: { after: 'm9' } }, records: [] } });
+  it('passes a relativeTo offset and short order alias through on action;list', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { meta: { offset: -10, limit: 50 }, records: [] } });
     const client = makeClient(mock);
 
     await client.media('repo1').list({
       folder: { path: '/albums' },
-      offset: { after: 'm9' },
+      relativeTo: { id: 'm9' },
+      offset: -10,
       limit: 50,
       orderBy: { property: 'captureTime', order: 'desc' },
     });
     expect(JSON.parse(mock.last.body!)).toEqual({
       folder: { path: '/albums' },
-      offset: { after: 'm9' },
+      relativeTo: { id: 'm9' },
+      offset: -10,
       limit: 50,
       orderBy: { property: 'captureTime', order: 'desc' },
     });
+  });
+
+  it('continues action;list from a cursor and exposes the neighbouring cursors', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { limit: 20, prev: 'c-prev', next: 'c-next' }, records: [] },
+    });
+    const client = makeClient(mock);
+
+    const page = await client.media('repo1').list({ folder: { path: '/albums' }, cursor: 'c1', limit: 20 });
+    expect(JSON.parse(mock.last.body!)).toEqual({ folder: { path: '/albums' }, cursor: 'c1', limit: 20 });
+    expect(page.meta.prev).toBe('c-prev');
+    expect(page.meta.next).toBe('c-next');
+  });
+
+  it('surfaces media-item-not-in-list for a relativeTo item outside the list', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 404,
+      headers: { 'content-type': 'application/problem+json' },
+      body: JSON.stringify({ type: ErrorType.MediaItemNotInList, status: 404 }),
+    });
+    const client = makeClient(mock);
+
+    const err = await client
+      .media('repo1')
+      .list({ folder: { path: '/albums' }, relativeTo: { id: 'm9' } })
+      .catch((e) => e);
+    expect(isApiError(err, ErrorType.MediaItemNotInList)).toBe(true);
   });
 
   it('extracts image and video-poster variants from a resource, ignoring non-variant links', async () => {

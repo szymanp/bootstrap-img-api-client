@@ -1,5 +1,5 @@
 import type { Effect, Localized, Permission, Principal, UuidString } from './common';
-import type { Resource } from './envelope';
+import type { PageCursor, PageQuery, Resource } from './envelope';
 import type { MediaItemId, SortOrder } from './media';
 
 /** Folder content kinds. */
@@ -184,11 +184,21 @@ export interface MediaMembershipOrderBy {
   order: SortOrder;
 }
 
-/** Query body for `POST /folders/{repoId}/{folderVar}/media;query`. */
-export interface MediaMembershipQuery {
-  /** Paging offset. */
+/**
+ * Query-form body for `POST /folders/{repoId}/{folderVar}/media;query`:
+ * filters, order, and where the page starts. Entries are links, so an item
+ * linked under two filenames is two entries.
+ */
+export interface MediaMembershipFilterQuery {
+  /** Entry to count `offset` from; a 404 `media-item-not-in-list` when there's no such (matching) filename. */
+  relativeTo?: { filename: string };
+  /**
+   * Entries to skip from the start of the list (`>= 0`), or, with
+   * `relativeTo`, the position relative to that entry (`0` starts with it,
+   * `-10` with the ten before it, `1` with the one after it). Defaults to `0`.
+   */
   offset?: number;
-  /** Paging limit. */
+  /** Page size (`>= 1`); without it, every entry is returned. */
   limit?: number;
   /** Wildcard to filter filenames on, e.g. `*.jpg`. */
   filename?: string;
@@ -196,7 +206,28 @@ export interface MediaMembershipQuery {
   orderBy?: MediaMembershipOrderBy;
   /** Field selector applied to `related.mediaitem` entries. */
   fields?: string | string[];
+  cursor?: never;
 }
+
+/**
+ * Cursor-form body for `POST /folders/{repoId}/{folderVar}/media;query`:
+ * continues from a previous response's `meta.prev`/`meta.next`. The cursor
+ * carries the filter and order, so they can't be sent alongside it.
+ */
+export interface MediaMembershipCursorQuery {
+  cursor: PageCursor;
+  /** Page size (`>= 1`); any size works with any cursor. */
+  limit?: number;
+  /** Field selector applied to `related.mediaitem` entries. */
+  fields?: string | string[];
+  relativeTo?: never;
+  offset?: never;
+  filename?: never;
+  orderBy?: never;
+}
+
+/** Query body for `POST /folders/{repoId}/{folderVar}/media;query` (see "Paging media lists" in the API docs). */
+export type MediaMembershipQuery = MediaMembershipFilterQuery | MediaMembershipCursorQuery;
 
 /** A patch op applied to a folder's direct media membership. */
 export type MediaMembershipPatch =
@@ -224,5 +255,15 @@ export interface TextMediaRecord {
 
 /** Query for `action;tree`. */
 export interface TreeQuery {
+  /** Levels below the folder to include (`>= 1`; `1` = direct children only); the whole subtree when omitted. */
   depth?: number;
+}
+
+/** Query for a folder's `action;list`: a flat list of its subfolders, ordered by path. */
+export interface FolderListQuery extends PageQuery {
+  /**
+   * Levels below the folder to include (`>= 1`; `1` = direct children only),
+   * or `null` for the whole subtree. Defaults to `1`.
+   */
+  depth?: number | null;
 }

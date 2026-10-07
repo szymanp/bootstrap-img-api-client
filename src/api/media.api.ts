@@ -96,7 +96,15 @@ export interface IMediaApi {
   /** Download a video item's HLS master playlist (`.m3u8` text). */
   hlsMaster(ref: MediaRef): Promise<string>;
 
-  /** List media items in a folder. */
+  /**
+   * List the media items a folder exposes, its subfolders included; each item
+   * is listed once. Pass either the query form (filters, `orderBy`, and an
+   * `offset`, counted from the start or from the `relativeTo` item) or the
+   * cursor form (`folder`, a `cursor` from a previous response's
+   * `meta.prev`/`meta.next`, and an optional `limit`). Throws `ApiError` 400
+   * `validation-failed` for invalid paging, and 404 `media-item-not-in-list`
+   * when the `relativeTo` item isn't in the (filtered) list.
+   */
   list(query: MediaListQuery, options?: { acceptLanguage?: string }): Promise<Collection<MediaResource>>;
 }
 

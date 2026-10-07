@@ -39,6 +39,8 @@ export const ErrorType = {
   FolderPathConflict: 'urn:bootstrap:error:folder-path-conflict',
   MediaItemNotFound: 'urn:bootstrap:error:media-item-not-found',
   MediaItemAlreadyExists: 'urn:bootstrap:error:media-item-already-exists',
+  /** A media list's `relativeTo` entry is not in the list (absent, not exposed, or filtered out). */
+  MediaItemNotInList: 'urn:bootstrap:error:media-item-not-in-list',
   /** A `size` variant was requested before the image was processed; retry later. */
   MediaVariantNotReady: 'urn:bootstrap:error:media-variant-not-ready',
   RevisionConflict: 'urn:bootstrap:error:revision-conflict',

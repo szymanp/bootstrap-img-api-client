@@ -5,6 +5,7 @@ import type {
   CreateFolderInput,
   EffectivePermission,
   Folder,
+  FolderListQuery,
   FolderRelated,
   MediaMembership,
   MediaMembershipPatch,
@@ -39,14 +40,25 @@ export interface IFoldersApi {
   /** List root-level folders the caller can reach. */
   listRoot(query?: PageQuery, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<Collection<FolderResource>>;
 
-  /** List direct children of a folder. */
+  /**
+   * List a folder's subfolders as a flat list, ordered by path (so each folder
+   * comes right before its own descendants; `data.path` tells their nesting
+   * apart). `query.depth` defaults to `1` (direct children only); `null`
+   * includes the whole subtree. Without `offset`/`limit`, every folder is
+   * returned. `meta` echoes `offset` and `limit` (`null` when absent) and,
+   * when given, `depth`.
+   */
   list(
     ref: FolderRefInput,
-    query?: PageQuery,
+    query?: FolderListQuery,
     options?: Pick<ReadOptions, 'acceptLanguage'>,
   ): Promise<Collection<FolderResource>>;
 
-  /** Return a recursive subtree of subfolders. */
+  /**
+   * Return a recursive subtree of subfolders, down to `query.depth` levels
+   * (`1` = direct children only), or the whole subtree without one.
+   * `meta.depth` echoes the requested depth.
+   */
   tree(
     ref: FolderRefInput,
     query?: TreeQuery,
@@ -106,7 +118,14 @@ export interface IFoldersApi {
   /**
    * Query the folder's direct media-item membership with paging, filename
    * filtering, and ordering. Returns the matching membership records plus the
-   * full media-item resources under `related.mediaitem`.
+   * full media-item resources under `related.mediaitem` (once per item).
+   *
+   * Pass either the query form (filters, `orderBy`, and an `offset`, counted
+   * from the start or from the `relativeTo` filename) or the cursor form (a
+   * `cursor` from a previous response's `meta.prev`/`meta.next`, plus an
+   * optional `limit`). Throws `ApiError` 400 `validation-failed` for invalid
+   * paging, and 404 `media-item-not-in-list` when the `relativeTo` filename
+   * isn't in the (filtered) list.
    */
   queryMedia(
     ref: FolderRefInput,

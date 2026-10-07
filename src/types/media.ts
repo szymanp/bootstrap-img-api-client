@@ -1,4 +1,5 @@
 import type { UuidString } from './common';
+import type { PageCursor } from './envelope';
 import type { FolderReference } from './folders';
 
 /** The identifier of a media item. */
@@ -78,14 +79,6 @@ export interface MediaMetadata {
 /** Sort direction; `asc`/`desc` are accepted as aliases. */
 export type SortOrder = 'ascending' | 'descending' | 'asc' | 'desc';
 
-/**
- * Paging offset for `POST /media/{repoId}/action;list`: a number of items to
- * skip (shorthand for `{ index }`), or `{ after }` to continue after that
- * item (keyset pagination). The response's `meta.offset` echoes it in object
- * form.
- */
-export type MediaListOffset = number | { index: number } | { after: MediaItemId };
-
 /** Ordering for `POST /media/{repoId}/action;list`. */
 export interface MediaListOrderBy {
   /**
@@ -98,18 +91,54 @@ export interface MediaListOrderBy {
   order: SortOrder;
 }
 
-/** Body for `POST /media/{repoId}/action;list`. */
-export interface MediaListQuery {
+/**
+ * Query-form body for `POST /media/{repoId}/action;list`: filters, order, and
+ * where the page starts. Each item is listed once, even when the folder
+ * exposes it through several subfolders or filenames.
+ */
+export interface MediaListFilterQuery {
   folder: FolderReference;
   mediaType?: MediaType;
   visibility?: MediaVisibility;
-  offset?: MediaListOffset;
+  /** Item to count `offset` from; a 404 `media-item-not-in-list` when the list doesn't contain it. */
+  relativeTo?: { id: MediaItemId };
+  /**
+   * Items to skip from the start of the list (`>= 0`), or, with `relativeTo`,
+   * the position relative to that item (`0` starts with it, `-10` with the ten
+   * before it, `1` with the one after it). Defaults to `0`.
+   */
+  offset?: number;
+  /** Page size (`>= 1`); defaults to `30`. */
   limit?: number;
   /** Defaults to `{ property: 'creationTime', order: 'descending' }` when omitted. */
   orderBy?: MediaListOrderBy;
   /** Field selector applied to the returned media-item resources. */
   fields?: string | string[];
+  cursor?: never;
 }
+
+/**
+ * Cursor-form body for `POST /media/{repoId}/action;list`: continues from a
+ * previous response's `meta.prev`/`meta.next`. The cursor carries the filters
+ * and order, so they can't be sent alongside it.
+ */
+export interface MediaListCursorQuery {
+  /** The folder the cursor was made for. */
+  folder: FolderReference;
+  cursor: PageCursor;
+  /** Page size (`>= 1`); any size works with any cursor. */
+  limit?: number;
+  /** Field selector applied to the returned media-item resources. */
+  fields?: string | string[];
+  mediaType?: never;
+  visibility?: never;
+  relativeTo?: never;
+  offset?: never;
+  orderBy?: never;
+}
+
+/** Body for `POST /media/{repoId}/action;list` (see "Paging media lists" in the API docs). */
+export type MediaListQuery = MediaListFilterQuery | MediaListCursorQuery;
 
 /** Acceptable binary payloads for an upload. */
 export type BinaryBody = Blob | ArrayBuffer | ArrayBufferView | ReadableStream<Uint8Array>;

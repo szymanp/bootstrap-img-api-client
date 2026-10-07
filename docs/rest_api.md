@@ -30,6 +30,53 @@ Authentication is **cookie-based**. The flow:
 
 Single-resource responses wrap the entity in `{ "meta", "data", "links", "related" }`; `meta.revision` (when present) is an opaque token for optimistic concurrency — echo it back verbatim on mutating requests. Collection responses use `{ "meta", "records": [ … ] }` (or `related` groupings as noted per-endpoint).
 
+### Paging media lists
+
+The two media lists, `POST /folders/{repoId}/{folderVar}/media;query` (a folder's own items) and
+`POST /media/{repoId}/action;list` (the items a folder exposes, its subfolders included), are paged the same way. A
+request takes one of two forms:
+
+- **Query form**: the list's filters and `orderBy`, plus an optional `offset` (default `0`) counting from the start
+  of the list (`>= 0`), or from the `relativeTo` entry. `relativeTo` names an entry of the list: `{ "filename": … }`
+  in a folder's own list (an item can be linked under two filenames), `{ "id": "<media-item-uuid>" }` in the list
+  with subfolders. From it, `offset` `0` starts with that entry, `-10` with the ten entries before it, and `1` with
+  the one after it. Near the start of the list the page starts at the first entry and is shorter (and has no
+  `meta.prev`).
+- **Cursor form**: a `cursor` from a previous response, plus an optional `limit` (and, for `action;list`, the
+  `folder`). The cursor carries the whole query it continues (folder, filters, order), so nothing else is sent: a
+  filter, `orderBy`, `relativeTo`, or `offset` next to a `cursor` is rejected.
+
+`limit` (`>= 1`) is not part of the start: a cursor can be read with any page size.
+
+Every response's `meta` carries the cursors of the neighbouring pages:
+
+```json5
+{
+  "offset": 20,          // as requested; absent if not requested
+  "limit": 10,           // absent if no limit applies
+  "prev": "<cursor>",    // continues before the first entry; absent when nothing comes before it
+  "next": "<cursor>"     // continues after the last entry; absent when nothing comes after it
+}
+```
+
+A cursor is an opaque string holding the sort values of the entry it was made from (keyset pagination). It keeps no
+server state and doesn't expire, and it still works after its entry has been deleted. Entries added or removed
+elsewhere don't shift the pages; rearranging the custom order between two pages can repeat or skip an entry. Each
+order ends with a unique tie-breaker (the filename in a folder's own list, the media item id in the list with
+subfolders), so entries with equal values are never skipped or repeated.
+
+A page that would contain no entries (an `offset` past the end of the list, or a page wholly before the start of the
+list) carries no cursors.
+
+Errors:
+
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`): a `cursor` combined with a filter, `orderBy`,
+  `relativeTo`, or `offset`; a negative `offset` without `relativeTo`; a `limit` below `1`; a cursor that doesn't
+  decode, was made for the other list, or for another folder.
+- `404 Not Found` (`urn:bootstrap:error:media-item-not-in-list`): the `relativeTo` entry is not in the list: no such
+  filename in the folder, an item the folder (with its subfolders) doesn't expose, or one the filters exclude. The
+  client can show the item on its own.
+
 ### Error format
 
 Error bodies are `application/problem+json`:
@@ -61,6 +108,7 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:organization-would-have-no-owners` | 422 |
 | `urn:bootstrap:error:folder-not-found` / `:parent-folder-not-found` / `:folder-already-exists` / `:folder-path-conflict` | 404 / 409 |
 | `urn:bootstrap:error:media-item-not-found` / `:media-item-already-exists` | 404 / 409 |
+| `urn:bootstrap:error:media-item-not-in-list` | 404 |
 | `urn:bootstrap:error:media-variant-not-ready` | 404 |
 | `urn:bootstrap:error:revision-conflict` | 409 |
 | `urn:bootstrap:error:idempotency-key-reused` | 409 |
@@ -1347,6 +1395,8 @@ Lists root-level folders in the repository.
 { "query": { "offset": 0, "limit": 20 } }
 ```
 
+`offset` and `limit` are optional. Without them, or without a request body, every folder is returned.
+
 #### Responses
 
 - `200 OK` — array of folder resources
@@ -1355,17 +1405,31 @@ Lists root-level folders in the repository.
 
 ### POST /folders/{repoId}/{folderVar}/action;list
 
-Lists direct children of a folder.
+Lists the subfolders of a folder as a flat list: its direct children, or all its descendants down to a depth.
 
 #### Request body (optional)
 
 ```json
-{ "query": { "offset": 0, "limit": 20 } }
+{ "query": { "depth": 3, "offset": 0, "limit": 20 } }
+```
+
+All fields are optional:
+
+- `depth` — the number of levels below the folder to include (`>= 1`; `1` = direct children only), or `null` for the
+  whole subtree. Defaults to `1`.
+- `offset` and `limit` — page over the list. Without them, or without a request body, every folder is returned.
+
+Folders are ordered by path, so each folder comes right before its own descendants; `data.path` tells their nesting
+apart. The response's `meta` echoes `offset` and `limit` (`null` when absent) and, when given, `depth`:
+
+```json
+{ "meta": { "offset": 0, "limit": 20, "depth": null }, "records": [ … ] }
 ```
 
 #### Responses
 
 - `200 OK` — paginated array of folder resources
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a `depth` below `1`
 - `404 Not Found`
 
 ---
@@ -1379,6 +1443,10 @@ Returns a recursive subtree of subfolders.
 ```json
 { "query": { "depth": 3 } }
 ```
+
+`depth` is the number of levels below the folder to include (`1` = direct children only). Without `depth`, or
+without a request body, the whole subtree is returned. The response's `meta.depth` echoes the requested depth and is
+absent when none was given.
 
 #### Responses
 
@@ -1604,9 +1672,11 @@ Queries the folder's direct media-item membership — the set of media items lin
 ```json5
 { 
   "query": {
-    /* Optional offset for paging. */
+    /* Optional entry to count the offset from (see "Paging media lists"). */
+    "relativeTo": { "filename": "IMG_1234.jpg" },
+    /* Optional number of entries to skip from the start of the list, or from relativeTo (then possibly negative). */
     "offset": 0,
-    /* Optional limit for paging. */
+    /* Optional page size; without it, every entry is returned. */
     "limit": 20,
     /* Optional wildcard to filter filenames on. */
     "filename": "*.jpg",
@@ -1631,13 +1701,21 @@ Queries the folder's direct media-item membership — the set of media items lin
 }
 ```
 
-#### Response body
-
-The response includes a list of media items directly associated with the folder in the "records" property. The media item resources for the listed media items are included under "related" / "mediaitem".
+Or, to continue from a cursor (see [Paging media lists](#paging-media-lists)):
 
 ```json
+{ "query": { "cursor": "<cursor from meta.prev or meta.next>", "limit": 20 } }
+```
+
+Entries are links, so the order's tie-breaker is the filename: an item linked under two filenames is two entries.
+
+#### Response body
+
+The response includes a list of media items directly associated with the folder in the "records" property. The media item resources for the listed media items are included under "related" / "mediaitem", once per item.
+
+```json5
 {
-  "meta": {},
+  "meta": { "limit": 20, "next": "<cursor>" },   // see "Paging media lists"
   "records": [
     {
       "data": { "id": "<media-item-uuid>", "filename": "first.JPG" },
@@ -1660,8 +1738,10 @@ The response includes a list of media items directly associated with the folder 
 #### Responses
 
 - `200 OK`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — invalid paging (see
+  [Paging media lists](#paging-media-lists))
 - `403 Forbidden` — caller lacks read permission on the folder
-- `404 Not Found`
+- `404 Not Found` — the folder, or (`urn:bootstrap:error:media-item-not-in-list`) the `relativeTo` filename
 
 ---
 
@@ -2078,7 +2158,8 @@ Lists media items in a folder.
   "folder": { "path": "/albums/vacation" },
   "mediaType": "image",
   "visibility": "private",
-  "offset": 0,
+  "relativeTo": { "id": "<media-item-uuid>" },
+  "offset": -10,
   "limit": 20,
   "orderBy": {
     "property": "creationTime",
@@ -2092,17 +2173,24 @@ the item's effective capture time, once metadata extraction has populated it (se
 with no extracted capture time sort last regardless of `order`. `orderBy.order` accepts `"ascending"`/`"asc"` or
 `"descending"`/`"desc"`. When `orderBy` is omitted, items are sorted by `creationTime`, descending.
 
-`offset` is either a number of items to skip (`0`, shorthand for `{ "index": 0 }`), or
-`{ "after": "<media-item-uuid>" }` to continue after that item (keyset pagination). The response's `meta.offset`
-echoes it in object form.
+`offset` is the number of items to skip from the start of the list, or, with `relativeTo`, the position to start
+at relative to that item (see [Paging media lists](#paging-media-lists)); `limit` defaults to `30`. To continue from a
+cursor (see [Paging media lists](#paging-media-lists)), send only the folder, the cursor, and optionally a limit:
+
+```json
+{ "folder": { "path": "/albums/vacation" }, "cursor": "<cursor from meta.prev or meta.next>", "limit": 20 }
+```
+
+Each item is listed once, even when the folder exposes it through several subfolders or filenames; the order's
+tie-breaker is the media item id.
 
 #### Response body
 
-```json
+```json5
 {
   "meta": {
-    "offset": null,
-    "limit": 30
+    "limit": 30,
+    "next": "<cursor>"   // see "Paging media lists"
   },
   "records": [
     {
@@ -2135,6 +2223,9 @@ echoes it in object form.
 #### Responses
 
 - `200 OK` — array of media records with metadata and variant links
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — invalid paging (see
+  [Paging media lists](#paging-media-lists))
 - `403 Forbidden` — caller lacks read permission on the folder
-- `404 Not Found` — folder not found
+- `404 Not Found` — folder not found, or (`urn:bootstrap:error:media-item-not-in-list`) the `relativeTo` item is not
+  in the list
 - `422 Unprocessable Entity` — folder path not found

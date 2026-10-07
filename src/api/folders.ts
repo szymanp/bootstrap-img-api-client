@@ -6,6 +6,7 @@ import type { ReadOptions, WriteLanguageOptions } from '../types/common';
 import { isMediaItemVariantLink, type Collection, type PageQuery } from '../types/envelope';
 import type {
   CreateFolderInput,
+  FolderListQuery,
   MediaMembership,
   MediaMembershipPatch,
   MediaMembershipQuery,
@@ -102,10 +103,10 @@ export class FoldersApi implements IFoldersApi {
     });
   }
 
-  /** List direct children of a folder. */
+  /** List a folder's subfolders flat, ordered by path: direct children, or descendants down to `query.depth`. */
   async list(
     ref: FolderRefInput,
-    query: PageQuery = {},
+    query: FolderListQuery = {},
     options: Pick<ReadOptions, 'acceptLanguage'> = {},
   ): Promise<Collection<FolderResource>> {
     return this.transport.request({

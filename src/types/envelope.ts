@@ -5,16 +5,27 @@
  * Collection responses use `{ meta, records }` (plus an optional `related` grouping).
  */
 
+/**
+ * Opaque keyset-pagination cursor from a media list's `meta.prev`/`meta.next`.
+ * It carries the whole query it continues, keeps no server state, and doesn't
+ * expire.
+ */
+export type PageCursor = string;
+
 /** Opaque concurrency token plus pagination cursors, depending on the endpoint. */
 export interface Meta {
   /** Optimistic-concurrency token; echo back verbatim on mutating requests. */
   revision?: string;
-  /** Pagination offset (collection responses). */
-  offset?: number;
-  /** Pagination limit (collection responses). */
-  limit?: number;
-  /** Tree depth (tree responses). */
-  depth?: number;
+  /** Pagination offset (collection responses); `null` when the endpoint echoes an absent offset. */
+  offset?: number | null;
+  /** Pagination limit (collection responses); `null` when the endpoint echoes an absent limit. */
+  limit?: number | null;
+  /** Requested depth (tree and subfolder-list responses); `null` for the whole subtree. */
+  depth?: number | null;
+  /** Cursor continuing before the page's first entry (media lists); absent when nothing comes before it. */
+  prev?: PageCursor;
+  /** Cursor continuing after the page's last entry (media lists); absent when nothing comes after it. */
+  next?: PageCursor;
   [key: string]: unknown;
 }
 
