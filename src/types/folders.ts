@@ -3,7 +3,17 @@ import type { PageCursor, PageQuery, Resource } from './envelope';
 import type { MediaItemId, SortOrder } from './media';
 
 /** Folder content kinds. */
-export type FolderType = 'root' | 'albums' | 'album' | 'document' | 'tag' | 'media' | 'media-source' | 'picture';
+export type FolderType =
+  | 'root'
+  | 'albums'
+  | 'album'
+  /** A folder which may contain other "album-collection"s and "album"s. */
+  | 'album-collection'
+  | 'document'
+  | 'tag'
+  | 'media'
+  | 'media-source'
+  | 'picture';
 
 /** A reference to a folder used inside JSON request bodies. */
 export type FolderReference = { id: FolderId } | { path: string };
@@ -234,11 +244,11 @@ export type MediaMembershipPatch =
   | { op: 'add'; id: MediaItemId; filename: string }
   | { op: 'remove'; filename: string }
   | {
-      op: 'move';
-      filename: string;
-      /** Moves after this filename's link, or to the front when `null`/omitted. */
-      afterFilename?: string | null;
-    };
+    op: 'move';
+    filename: string;
+    /** Moves after this filename's link, or to the front when `null`/omitted. */
+    afterFilename?: string | null;
+  };
 
 /** A single reference recorded from a folder's text body / associated object data. */
 export interface TextMediaRecord {
@@ -266,4 +276,10 @@ export interface FolderListQuery extends PageQuery {
    * or `null` for the whole subtree. Defaults to `1`.
    */
   depth?: number | null;
+  /**
+   * Non-empty list of folder types to list. Filters the listed folders, not the
+   * walk: a folder of another type is left out, but its descendants within
+   * `depth` are still listed. Every type when omitted. Paging applies after it.
+   */
+  folderType?: FolderType[];
 }

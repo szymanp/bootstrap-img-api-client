@@ -678,6 +678,20 @@ describe('folders', () => {
     expect(JSON.parse(mock.last.body!)).toEqual({ query: { depth: 2 } });
   });
 
+  it('sends folderType on action;list and reads it back from meta', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { offset: null, limit: null, depth: null, folderType: ['album'] }, records: [] },
+    });
+    const client = makeClient(mock);
+
+    const res = await client.folders('repo1').list({ path: '/albums' }, { depth: null, folderType: ['album'] });
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/path;albums/action;list');
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { depth: null, folderType: ['album'] } });
+    expect(res.meta.folderType).toEqual(['album']);
+  });
+
   it('sends cover and dateRange in the update body, including null to reset', async () => {
     const mock = new MockFetch().enqueue({
       status: 200,

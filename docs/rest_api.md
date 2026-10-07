@@ -1275,7 +1275,7 @@ Creates a folder under an existing parent. `Content-Language` is required.
 }
 ```
 
-Valid folder types: `root`, `albums`, `album`, `document`, `tag`, `media`, `media-source`, `picture`.
+Valid folder types: `root`, `albums`, `album`, `album-collection`, `document`, `tag`, `media`, `media-source`, `picture`.
 
 `title` is either a bare string, stored under the request's `Content-Language`, or a `{ "<lang>": "…" }` object
 carrying every translation at once. An empty object (`{}`) is accepted and creates a folder with no title.
@@ -1410,26 +1410,32 @@ Lists the subfolders of a folder as a flat list: its direct children, or all its
 #### Request body (optional)
 
 ```json
-{ "query": { "depth": 3, "offset": 0, "limit": 20 } }
+{ "query": { "depth": 3, "folderType": ["album"], "offset": 0, "limit": 20 } }
 ```
 
 All fields are optional:
 
 - `depth` — the number of levels below the folder to include (`>= 1`; `1` = direct children only), or `null` for the
   whole subtree. Defaults to `1`.
-- `offset` and `limit` — page over the list. Without them, or without a request body, every folder is returned.
+- `folderType` — a non-empty list of folder types: only folders of one of these types are listed. It filters the
+  listed folders, not the walk: a folder of another type is left out, but its descendants within `depth` are still
+  listed. Without it, folders of every type are listed.
+- `offset` and `limit` — page over the list (after `folderType` has been applied). Without them, or without a request
+  body, every folder is returned.
 
-Folders are ordered by path, so each folder comes right before its own descendants; `data.path` tells their nesting
-apart. The response's `meta` echoes `offset` and `limit` (`null` when absent) and, when given, `depth`:
+Folders are ordered by path, so each folder comes before its own descendants; `data.path` tells their nesting apart.
+With `folderType`, a listed folder's parent may be missing from the list. The response's `meta` echoes `offset` and
+`limit` (`null` when absent) and, when given, `depth` and `folderType`:
 
 ```json
-{ "meta": { "offset": 0, "limit": 20, "depth": null }, "records": [ … ] }
+{ "meta": { "offset": 0, "limit": 20, "depth": null, "folderType": ["album"] }, "records": [ … ] }
 ```
 
 #### Responses
 
 - `200 OK` — paginated array of folder resources
-- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a `depth` below `1`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a `depth` below `1`, an empty `folderType`, or an
+  unknown folder type
 - `404 Not Found`
 
 ---

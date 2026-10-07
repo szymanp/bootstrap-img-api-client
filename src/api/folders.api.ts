@@ -42,11 +42,13 @@ export interface IFoldersApi {
 
   /**
    * List a folder's subfolders as a flat list, ordered by path (so each folder
-   * comes right before its own descendants; `data.path` tells their nesting
-   * apart). `query.depth` defaults to `1` (direct children only); `null`
-   * includes the whole subtree. Without `offset`/`limit`, every folder is
-   * returned. `meta` echoes `offset` and `limit` (`null` when absent) and,
-   * when given, `depth`.
+   * comes before its own descendants; `data.path` tells their nesting apart).
+   * `query.depth` defaults to `1` (direct children only); `null` includes the
+   * whole subtree. `query.folderType` keeps only folders of those types (their
+   * descendants within `depth` are still walked, so a listed folder's parent may
+   * be missing). Without `offset`/`limit`, every folder is returned; paging
+   * applies after the type filter. `meta` echoes `offset` and `limit` (`null`
+   * when absent) and, when given, `depth` and `folderType`.
    */
   list(
     ref: FolderRefInput,
