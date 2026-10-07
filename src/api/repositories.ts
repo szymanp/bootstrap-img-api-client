@@ -48,13 +48,13 @@ export class RepositoriesApi implements IRepositoriesApi {
   /** List repositories the caller has a role on (paginated). */
   async query(
     query: PageQuery = {},
-    options: Pick<ReadOptions, 'acceptLanguage'> = {},
+    options: Pick<ReadOptions, 'acceptLanguage' | 'fields'> = {},
   ): Promise<Collection<RepositoryResource>> {
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).queryRepos().href,
       acceptLanguage: options.acceptLanguage,
-      body: { kind: 'json', value: { query } },
+      body: { kind: 'json', value: { query, fields: fieldsParam(options.fields) } },
       parse: parseJson<Collection<RepositoryResource>>,
     });
   }

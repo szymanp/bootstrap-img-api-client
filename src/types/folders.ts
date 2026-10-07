@@ -1,6 +1,6 @@
 import type { Effect, Localized, Permission, Principal, UuidString } from './common';
 import type { Resource } from './envelope';
-import type { MediaItemId } from './media';
+import type { MediaItemId, SortOrder } from './media';
 
 /** Folder content kinds. */
 export type FolderType = 'root' | 'albums' | 'album' | 'document' | 'tag' | 'media' | 'media-source' | 'picture';
@@ -27,7 +27,54 @@ export interface Folder {
   data?: Record<string, unknown>;
   /** First 250 chars of the localized markdown body (standard representation only). */
   textPreview?: string;
+  /**
+   * The folder's cover image. `standard`: a {@link FolderCover} (explicit or
+   * automatic), absent when no item qualifies. `original`: the explicit
+   * `{ id }` only, `null` when automatic.
+   */
+  cover?: FolderCover | FolderCoverInput | null;
+  /**
+   * The folder's date range. `standard`: a {@link FolderDateRange} (explicit
+   * or automatic), absent when neither exists. `original`: the explicit
+   * `{ start, end }` only, `null` when automatic.
+   */
+  dateRange?: FolderDateRange | FolderDateRangeInput | null;
+  /**
+   * Number of distinct media items the folder exposes (its own and all its
+   * subfolders'), of any type or visibility. Omitted in `original`.
+   */
+  itemCount?: number;
   [key: string]: unknown;
+}
+
+/** Whether a folder summary value was chosen by the user or computed by the server. */
+export type FolderSummarySelection = 'explicit' | 'auto';
+
+/** A folder's cover image, as returned in the `standard` representation. */
+export interface FolderCover {
+  id: MediaItemId;
+  selection: FolderSummarySelection;
+}
+
+/** A folder's date range, as returned in the `standard` representation. Dates are `YYYY-MM-DD`, inclusive. */
+export interface FolderDateRange {
+  start: string;
+  end: string;
+  selection: FolderSummarySelection;
+}
+
+/**
+ * An explicit cover, as written on create/update. The item must be an image
+ * with `normal` visibility that the folder or one of its subfolders contains.
+ */
+export interface FolderCoverInput {
+  id: MediaItemId;
+}
+
+/** An explicit date range (`YYYY-MM-DD`, both required, inclusive), as written on create/update. */
+export interface FolderDateRangeInput {
+  start: string;
+  end: string;
 }
 
 /** Ancestor chain attached to single-folder responses (root down to parent). */
@@ -39,7 +86,7 @@ export interface FolderRelated {
 export interface CreateFolderInput {
   /**
    * The ID of the folder to be created.
-   * 
+   *
    * If not specified, an ID will be assigned by the server.
    */
   id?: FolderId;
@@ -53,6 +100,14 @@ export interface CreateFolderInput {
   type: FolderType;
   /** Optional typed content; defaults to `{}` when omitted. */
   data?: Record<string, unknown>;
+  /**
+   * Accepted as on update, but a new folder contains no media, so a `cover`
+   * is always rejected here (422); it is useful in a metadata-sync
+   * `folder.create`, which can add the media in the same operation.
+   */
+  cover?: FolderCoverInput | null;
+  /** Explicit date range; `null`/omitted means automatic. `start` after `end` is a 400. */
+  dateRange?: FolderDateRangeInput | null;
 }
 
 /** Mutable fields for `POST /folders/{repoId}/{folderVar}` (update). All optional. */
@@ -67,6 +122,19 @@ export interface UpdateFolderInput {
    * given, so strip the `type`/`title` keys a metadata snapshot adds.
    */
   data?: Record<string, unknown>;
+  /**
+   * Sets the explicit cover; `null` returns to the automatic cover. The item
+   * must be an image with `normal` visibility that the folder or one of its
+   * subfolders contains (checked after any move in the same request);
+   * otherwise a 422 (`Invalid Folder Cover`), or a 404
+   * (`ErrorType.MediaItemNotFound`) for a nonexistent item.
+   */
+  cover?: FolderCoverInput | null;
+  /**
+   * Sets the explicit date range; `null` returns to the automatic range. Not
+   * checked against the folder's media. `start` after `end` is a 400.
+   */
+  dateRange?: FolderDateRangeInput | null;
 }
 
 /** A permission change sent to `PATCH .../permissions`. */
@@ -113,7 +181,7 @@ export interface MediaMembershipOrderBy {
    *   `move` op on {@link MediaMembershipPatch})
    */
   property: 'filename' | 'creationTime' | 'captureTime' | 'custom';
-  order: 'ascending' | 'descending';
+  order: SortOrder;
 }
 
 /** Query body for `POST /folders/{repoId}/{folderVar}/media;query`. */

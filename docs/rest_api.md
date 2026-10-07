@@ -438,7 +438,9 @@ Returns a paginated list of repositories the caller has a role on.
 { "query": { "offset": 0, "limit": 20 } }
 ```
 
-Both fields are optional.
+Both fields are optional. An optional top-level `fields` array selects the record fields, as `fields` does for
+`GET /repos/{repoId}`. By default, each record carries `organizationName` (absent if the repository has no
+organization), `name`, and `title`; `owners` and `editors` are never included.
 
 #### Responses
 
@@ -452,8 +454,8 @@ Retrieves a repository.
 
 #### Query parameters
 
-- `fields` (optional) — comma-separated field selector. Besides the default `name`, `title`, `owners`, and `editors`,
-  `organizationName` (the name of the repository's organization, absent if it has none) can be selected.
+- `fields` (optional) — comma-separated field selector over `organizationName` (the name of the repository's
+  organization, absent if it has none), `name`, `title`, `owners`, and `editors`. All of them are returned by default.
 - `representation` (optional) — `standard` (default) or `original`
 
 The `representation` parameter selects how the repository is rendered:
@@ -853,6 +855,9 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
       "name": "narty",
       // folders.data_content (kind renamed to type) plus the folder's full localized title, verbatim
       "data": { "type": "album", "title": { "en-us": "Skiing", "pl-pl": "Narty" } },
+      // the explicit cover and date range, null when automatic, in the shape folder.create/folder.update take
+      "cover": { "id": "media-item-uuid" },
+      "dateRange": null,
       "texts": { "en-us": "…" },
       // effective (direct + inherited) grants, same records as GET .../permissions — see below
       "permissions": [
@@ -948,13 +953,18 @@ send an object to set specific languages.
 - `permissions` — the same patch array `PATCH .../permissions` accepts (requires the repository **owner** role).
 - `media` — the same patch array `PATCH .../media` accepts.
 
-`folder.update`'s `changes.name`/`.parent`/`.title`/`.data` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
+It also accepts `cover` and `dateRange`, as on `POST /folders/{repoId}`. Unlike there, a `cover` can be valid: it is
+checked after the operation's `media` patches, so a plan can link an item into the new folder and make it the
+cover.
+
+`folder.update`'s `changes.name`/`.parent`/`.title`/`.data`/`.cover`/`.dateRange` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
 own update fields; `changes.permissions` is the same patch array `PATCH .../permissions` accepts (a `permissions`
 change additionally requires the caller to hold the repository's **owner** role, matching that endpoint); `changes.media`
 is the same patch array `PATCH .../media` accepts. `changes.texts` is `{ "put": { "<lang>": "<markdown>" }, "delete":
 ["<lang>", ...] }` — `put` stores/replaces the body for each named language (merged into the folder's existing
 translations, like `PUT .../text`); `delete` removes a stored language entirely (no single-resource equivalent exists
-for this).
+for this). `changes.cover` is applied last, after `changes.media`, so it can name an item that the same operation
+links into the folder.
 
 ```json5
 { "op": "repository.update", "expectedRevision": "old-repository-revision-uuid", "name": "piotrek", "title": "Piotrek" }
@@ -1006,10 +1016,10 @@ and checking every `expectedRevision`, the server applies the plan in fixed phas
    descendants is allowed: both must exist and match their `expectedRevision` when the plan starts. A folder moved
    out of a deleted folder (phase 2) survives the delete.
 4. Every folder from phase 2 takes its final name.
-5. Content, against the folders' final locations: each `folder.update`'s `title`/`data`, then `texts`, then
-   `permissions`, then `media` (applied strictly in array order, as in `PATCH .../media`); then each
-   `folder.create`'s `texts`, `permissions`, and `media`. Changes to a folder that a `folder.delete` in the same plan
-   removed (because it deleted an ancestor) are skipped.
+5. Content, against the folders' final locations: each `folder.update`'s `title`/`data`/`dateRange`, then `texts`,
+   then `permissions`, then `media` (applied strictly in array order, as in `PATCH .../media`), then `cover`; then
+   each `folder.create`'s `texts`, `permissions`, `media`, `dateRange`, and `cover`. Changes to a folder that a
+   `folder.delete` in the same plan removed (because it deleted an ancestor) are skipped.
 
 Only the **final** state must have unique folder paths. A plan may delete a folder and create another under the same
 name, move or rename a folder into a name another operation frees up, or swap two sibling names. A plan whose final
@@ -1104,7 +1114,10 @@ subtree that a `folder.delete` in the same plan removes — whether its `parent`
   ```
 
 - `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, no `errors` member) — a media `move` whose
-  `afterFilename` equals its `filename`.
+  `afterFilename` equals its `filename`; a `dateRange` whose `start` is after its `end`; or a `cover` that is not an
+  image, is `restricted`, or is not in the folder or its subfolders once the operation's media patches have applied
+  (title `Invalid Folder Cover`). A `cover` naming a nonexistent media item is a `404`
+  (`urn:bootstrap:error:media-item-not-found`).
 - `422 Unprocessable Entity` (`urn:bootstrap:error:repository-would-have-no-owners`) — a `repository.update` op
   supplied `owners: []`.
 
@@ -1143,6 +1156,51 @@ Folder `links` includes a `text` link pointing at the text subresource. When any
 "text": { "rel": "text", "href": "…/text", "language": ["en-us", "pl-pl"] }
 ```
 
+#### Cover, date range, and item count
+
+Folder `data` also carries a summary of everything the folder exposes: its own media items and those of all its
+subfolders (see [folder_summary_plan.md](folder_summary_plan.md)).
+
+```json5
+{
+  "cover": { "id": "<media-item-uuid>", "selection": "auto" },
+  "dateRange": { "start": "2014-11-10", "end": "2014-11-17", "selection": "auto" },
+  "itemCount": 2
+}
+```
+
+- `cover` — the folder's cover image. The user can choose it (`selection: "explicit"`; see `cover` on
+  `POST /folders/{repoId}/{folderVar}`); otherwise (`selection: "auto"`) it is the first image (with `normal`
+  visibility) in the folder's own custom order, failing that the earliest-captured such image among everything the
+  folder exposes. Videos and `restricted` items are never covers. An explicit cover that the folder no longer exposes
+  (unlinked, or its subfolder moved away) is replaced by the automatic one, but the choice is kept and applies again
+  once the item is back. Absent when no item qualifies.
+- `dateRange` — the folder's explicit date range (`selection: "explicit"`) if the user set one; otherwise
+  (`selection: "auto"`) the earliest and latest local capture dates (inclusive) among the exposed items, ignoring
+  items without a capture time. Absent when neither exists.
+- `itemCount` — the number of distinct media items the folder exposes, of any type or visibility; an item linked
+  more than once counts once.
+
+The automatic values are computed in the background, so they can lag behind a change: by up to about a second after
+an upload, a move, or a membership change, and for `dateRange` until the item's metadata has been extracted. Explicit
+values, and a new folder's `itemCount: 0`, show at once. The fields are included by default and can be selected with
+`fields` like any other field. `?representation=original` omits `itemCount` and renders `cover` and `dateRange` as
+the explicit values only (`{ "id": … }` and `{ "start", "end" }`), `null` when automatic.
+
+With a cover, `links` also includes a `cover` link to the cover item's metadata and, once the image has been
+processed, `cover:variant:*` links mirroring its `image:variant:*` links, so the cover can be displayed without
+fetching its metadata:
+
+```json
+"cover": { "rel": "cover", "href": "/media/{repoId}/mid;{mediaItemId}/metadata" },
+"cover:variant:primary": { "rel": "cover:variant:primary", "href": "/media/{repoId}/mid;{mediaItemId}", "width": 2560, "height": 1440, "hash": "<sha256-hex>" },
+"cover:variant:sm": { "rel": "cover:variant:sm", "href": "/media/{repoId}/mid;{mediaItemId}?size=sm", "width": 640, "height": 480 }
+```
+
+The summary fields and cover links appear on the folders returned by `GET`, create, update, `action;list`,
+`action;listroot`, and `action;tree`, but not on `related.ancestors` entries, nor on folders listed under another
+resource's `related` (`…/permissions`, `…/text/media`).
+
 ### POST /folders/{repoId}
 
 Creates a folder under an existing parent. `Content-Language` is required.
@@ -1171,12 +1229,17 @@ The inner `data` object is optional. When omitted, an empty default content obje
 
 The `data.id` property (a UUID sibling of `parent`/`name`/`title`/`type`, not part of the inner `data` content object) is optional and specifies the ID of the newly created folder. If omitted, an ID is assigned automatically by the server. If a folder with that ID already exists, the request fails with `409 Conflict` (`urn:bootstrap:error:folder-already-exists`).
 
+`data.cover` and `data.dateRange` are accepted as on `POST /folders/{repoId}/{folderVar}`. A new folder contains no
+media, so a `cover` is always rejected here; it is useful in a metadata-sync `folder.create`, which can add the media
+in the same operation.
+
 #### Responses
 
 - `200 OK` — folder resource with ancestors
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`
 - `404 Not Found` — parent folder not found
 - `409 Conflict` - if a folder ID specified, but a folder with this ID already exists
-- `422 Unprocessable Entity` — invalid parent reference
+- `422 Unprocessable Entity` — invalid parent reference, or a `cover` (which the new folder cannot contain yet)
 
 ---
 
@@ -1192,7 +1255,7 @@ Retrieves a folder.
 The `representation` parameter selects how the folder is rendered:
 
 - `standard` (the default when omitted) — the rich representation: `title` is the single translation negotiated for `Accept-Language`, the derived `textPreview` field is included when text content exists, and `related.ancestors` lists the ancestor chain.
-- `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations, derived fields (such as `textPreview`) are omitted, and no `related.ancestors` section is returned. The included fields are `id`, `name`, `path`, `type`, `title`, and `data`.
+- `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations, derived fields (such as `textPreview` and `itemCount`) are omitted, and no `related.ancestors` section is returned. The included fields are `id`, `name`, `path`, `type`, `title`, `data`, and the explicit `cover` and `dateRange` (`null` when automatic).
 
 #### Responses
 
@@ -1214,7 +1277,9 @@ Updates a folder (rename, move, change title, or replace typed content). `meta.r
     "name": "new-name",
     "parent": { "path": "/albums" },
     "title": "Updated Title",
-    "data": { "title": "Updated Cover" }
+    "data": { "title": "Updated Cover" },
+    "cover": { "id": "<media-item-uuid>" },
+    "dateRange": { "start": "2026-08-01", "end": "2026-08-14" }
   }
 }
 ```
@@ -1227,13 +1292,23 @@ All fields under `data` are optional:
 - `data` — replaces the folder's typed content JSON wholesale (no key-level merge), including the reserved `text`
   key; omitting it leaves the existing content unchanged. Every key is stored as given, so do not echo back the
   `type`/`title` keys a metadata snapshot adds to its folder `data` — they would be stored as ordinary content fields.
+- `cover` — `{ "id": "<media-item-uuid>" }` sets the folder's explicit cover; `null` returns to the automatic cover.
+  The item must be an image with `normal` visibility that the folder or one of its subfolders contains, so anyone who
+  can read the folder can display it. It is checked after any move in the same request.
+- `dateRange` — `{ "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" }` sets the folder's explicit date range (both dates
+  required, inclusive); `null` returns to the automatic range. It is not checked against the folder's media, so it may
+  be wider (the whole trip, including days without photos) or narrower than the automatic one.
+
+Changing `cover` or `dateRange` bumps the revision, like any other change, and shows in the response at once.
 
 #### Responses
 
 - `200 OK` — updated folder resource with ancestors
-- `404 Not Found`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`
+- `404 Not Found` — the folder, or (`urn:bootstrap:error:media-item-not-found`) the `cover` item
 - `409 Conflict` — revision mismatch
-- `422 Unprocessable Entity`
+- `422 Unprocessable Entity` — e.g. a `cover` that is not an image, is `restricted`, or is not in the folder or its
+  subfolders (`urn:bootstrap:error:validation-failed`, title `Invalid Folder Cover`)
 
 ---
 
@@ -1538,8 +1613,8 @@ Queries the folder's direct media-item membership — the set of media items lin
         `docs/media_metadata.md`); items with no extracted capture time sort last regardless of "order"
       - "custom" — the folder's persisted, user-arrangeable order (see `PATCH .../media`'s `move` op)
       Possible values for "order":
-      - "ascending"
-      - "descending"
+      - "ascending" (or "asc")
+      - "descending" (or "desc")
     */
     "orderBy": {
       "property": "custom",
@@ -2007,7 +2082,12 @@ Lists media items in a folder.
 
 All fields except `folder` are optional. `orderBy.property` accepts `"creationTime"` (default) or `"captureTime"` —
 the item's effective capture time, once metadata extraction has populated it (see `docs/media_metadata.md`); items
-with no extracted capture time sort last regardless of `order`.
+with no extracted capture time sort last regardless of `order`. `orderBy.order` accepts `"ascending"`/`"asc"` or
+`"descending"`/`"desc"`. When `orderBy` is omitted, items are sorted by `creationTime`, descending.
+
+`offset` is either a number of items to skip (`0`, shorthand for `{ "index": 0 }`), or
+`{ "after": "<media-item-uuid>" }` to continue after that item (keyset pagination). The response's `meta.offset`
+echoes it in object form.
 
 #### Response body
 

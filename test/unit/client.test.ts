@@ -330,6 +330,15 @@ describe('repositories', () => {
     expect(url.searchParams.get('representation')).toBe('original');
   });
 
+  it('sends fields as a top-level body field on query', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { meta: {}, records: [] } });
+    const client = makeClient(mock);
+
+    await client.repos.query({ limit: 10 }, { fields: ['organizationName', 'name'] });
+    expect(new URL(mock.last.url).pathname).toBe('/repos;query');
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { limit: 10 }, fields: 'organizationName,name' });
+  });
+
   it('sends revision in the body on update', async () => {
     const mock = new MockFetch().enqueue({
       status: 200,
@@ -655,6 +664,60 @@ describe('folders', () => {
     expect(JSON.parse(mock.last.body!)).toEqual({ query: { limit: 5 } });
   });
 
+  it('sends cover and dateRange in the update body, including null to reset', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: { revision: 'r2' },
+        data: {
+          id: 'f1',
+          cover: { id: 'm1', selection: 'explicit' },
+          dateRange: { start: '2014-11-10', end: '2014-11-17', selection: 'auto' },
+          itemCount: 2,
+        },
+      },
+    });
+    const client = makeClient(mock);
+
+    const folder = await client.folders('repo1').update({ id: 'f1' }, 'r1', { cover: { id: 'm1' }, dateRange: null });
+    expect(mock.last.method).toBe('POST');
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      meta: { revision: 'r1' },
+      data: { cover: { id: 'm1' }, dateRange: null },
+    });
+    expect(folder.data.itemCount).toBe(2);
+  });
+
+  it('extracts cover variants from a folder resource', () => {
+    const client = makeClient(new MockFetch());
+
+    const resource = {
+      meta: {},
+      data: { id: 'f1' },
+      links: {
+        cover: { rel: 'cover', href: '/media/repo1/mid;m1/metadata' },
+        'cover:variant:sm': {
+          rel: 'cover:variant:sm',
+          href: '/media/repo1/mid;m1?size=sm',
+          width: 640,
+          height: 480,
+        },
+      },
+    };
+
+    expect(client.folders('repo1').getCoverVariants(resource)).toEqual([
+      {
+        rel: 'cover:variant:sm',
+        href: '/media/repo1/mid;m1?size=sm',
+        width: 640,
+        height: 480,
+        type: 'image',
+        name: 'sm',
+      },
+    ]);
+    expect(client.folders('repo1').getCoverVariants({ meta: {}, data: { id: 'f1' } })).toEqual([]);
+  });
+
   it('wraps permission records under data and sends PATCH', async () => {
     const mock = new MockFetch().enqueue({ status: 204 });
     const client = makeClient(mock);
@@ -904,6 +967,24 @@ describe('media', () => {
     expect(JSON.parse(mock.last.body!)).toEqual({
       folder: { path: '/albums' },
       fields: 'type,metadata',
+    });
+  });
+
+  it('passes a keyset offset and short order alias through on action;list', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { meta: { offset: { after: 'm9' } }, records: [] } });
+    const client = makeClient(mock);
+
+    await client.media('repo1').list({
+      folder: { path: '/albums' },
+      offset: { after: 'm9' },
+      limit: 50,
+      orderBy: { property: 'captureTime', order: 'desc' },
+    });
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      folder: { path: '/albums' },
+      offset: { after: 'm9' },
+      limit: 50,
+      orderBy: { property: 'captureTime', order: 'desc' },
     });
   });
 

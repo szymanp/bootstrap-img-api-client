@@ -18,13 +18,18 @@ export interface IRepositoriesApi {
   create(input: CreateRepositoryInput, options?: WriteLanguageOptions): Promise<RepositoryResource>;
 
   /**
-   * List repositories the caller has a role on (paginated).
+   * List repositories the caller has a role on (paginated). By default each
+   * record carries `organizationName` (absent if none), `name`, and `title`;
+   * `owners` and `editors` are never included.
    *
    * @param query Pagination offset/limit.
-   * @param options `Accept-Language` override.
+   * @param options Field selector and `Accept-Language` override.
    * @returns A page of repositories.
    */
-  query(query?: PageQuery, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<Collection<RepositoryResource>>;
+  query(
+    query?: PageQuery,
+    options?: Pick<ReadOptions, 'acceptLanguage' | 'fields'>,
+  ): Promise<Collection<RepositoryResource>>;
 
   /**
    * Retrieve a repository.

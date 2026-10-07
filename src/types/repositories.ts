@@ -18,8 +18,8 @@ export interface Repository {
   /** When present, wholesale-replaces the set of editors; `[]` clears them. */
   editors?: Principal[];
   /**
-   * Name of the repository's organization; absent if it has none. Not
-   * returned by default — select it with `fields`.
+   * Name of the repository's organization; absent if it has none. Returned
+   * by default (and selectable with `fields`).
    */
   organizationName?: string;
   [key: string]: unknown;

@@ -15,6 +15,7 @@ import type {
   UpdateFolderInput,
 } from '../types/folders';
 import type { MediaMetadata } from '../types/media';
+import type { MediaItemVariant } from './media.api';
 
 /** Folder endpoints, scoped to a single repository. */
 export interface IFoldersApi {
@@ -125,6 +126,14 @@ export interface IFoldersApi {
    * the folder's custom order.
    */
   patchMedia(ref: FolderRefInput, patches: MediaMembershipPatch[]): Promise<MediaMembership[]>;
+
+  /**
+   * Reads the folder's cover image variants (its `cover:variant:*` links,
+   * mirroring the cover item's `image:variant:*` links), so the cover can be
+   * displayed without fetching its metadata. Empty when the folder has no
+   * cover or the cover image hasn't been processed yet.
+   */
+  getCoverVariants(resource: FolderResource): MediaItemVariant[];
 }
 
 export type FolderResource = Resource<Folder, FolderRelated>;

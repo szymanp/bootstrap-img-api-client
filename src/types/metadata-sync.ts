@@ -1,5 +1,13 @@
 import type { LanguageTag, Localized, Principal } from './common';
-import type { FolderId, FolderReference, FolderType, MediaMembershipPatch, PermissionRecord } from './folders';
+import type {
+  FolderCoverInput,
+  FolderDateRangeInput,
+  FolderId,
+  FolderReference,
+  FolderType,
+  MediaMembershipPatch,
+  PermissionRecord,
+} from './folders';
 
 /** Body for `POST /repos/{repoId}/metadata-sync`'s `operations`. */
 export interface MetadataSyncPlan {
@@ -56,6 +64,14 @@ export interface FolderCreateOperation {
   permissions?: PermissionRecord[];
   /** Same patch array as `PATCH .../media`, applied in array order. */
   media?: MediaMembershipPatch[];
+  /** Explicit date range, as on `POST /folders/{repoId}`; `null`/omitted means automatic. */
+  dateRange?: FolderDateRangeInput | null;
+  /**
+   * Explicit cover, as on `POST /folders/{repoId}`. Unlike there, it can be
+   * valid: it is checked after this operation's `media` patches, so the plan
+   * can link an item into the new folder and make it the cover.
+   */
+  cover?: FolderCoverInput | null;
 }
 
 /**
@@ -113,4 +129,12 @@ export interface FolderUpdateChanges {
    */
   permissions?: PermissionRecord[];
   media?: MediaMembershipPatch[];
+  /** As on `POST /folders/{repoId}/{folderVar}`; `null` returns to the automatic range. */
+  dateRange?: FolderDateRangeInput | null;
+  /**
+   * As on `POST /folders/{repoId}/{folderVar}`; `null` returns to the
+   * automatic cover. Applied last, after `media`, so it can name an item the
+   * same operation links into the folder.
+   */
+  cover?: FolderCoverInput | null;
 }

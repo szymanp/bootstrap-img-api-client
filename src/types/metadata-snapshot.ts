@@ -1,6 +1,14 @@
 import type { Localized, Principal } from './common';
 import type { Resource } from './envelope';
-import type { EffectivePermission, FolderId, FolderReference, FolderType, MediaMembership } from './folders';
+import type {
+  EffectivePermission,
+  FolderCoverInput,
+  FolderDateRangeInput,
+  FolderId,
+  FolderReference,
+  FolderType,
+  MediaMembership,
+} from './folders';
 import type { MediaItemId, MediaType, MediaVisibility } from './media';
 
 /** A named group of fields a metadata snapshot can include. */
@@ -32,10 +40,7 @@ export interface CreateMetadataSnapshotInput {
  * the repository record, then folders in path order (parents before
  * children), then media items.
  */
-export type MetadataSnapshotRecord =
-  | RepositorySnapshotRecord
-  | FolderSnapshotRecord
-  | MediaItemSnapshotRecord;
+export type MetadataSnapshotRecord = RepositorySnapshotRecord | FolderSnapshotRecord | MediaItemSnapshotRecord;
 
 /** The repository record in a `Ready` snapshot. */
 export interface RepositorySnapshotRecord {
@@ -63,6 +68,10 @@ export interface FolderSnapshotRecord {
    * `folder.update`, remove `type` and `title` and send the rest as `data`.
    */
   data: Record<string, unknown> & { type: FolderType; title: Localized };
+  /** The explicit cover, `null` when automatic — the shape `folder.create`/`folder.update` take. */
+  cover?: FolderCoverInput | null;
+  /** The explicit date range, `null` when automatic — the shape `folder.create`/`folder.update` take. */
+  dateRange?: FolderDateRangeInput | null;
   texts?: Record<string, string>;
   /**
    * Effective (direct + inherited) grants, same records as `GET .../permissions`.

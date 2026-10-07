@@ -75,6 +75,17 @@ export interface MediaMetadata {
   [key: string]: unknown;
 }
 
+/** Sort direction; `asc`/`desc` are accepted as aliases. */
+export type SortOrder = 'ascending' | 'descending' | 'asc' | 'desc';
+
+/**
+ * Paging offset for `POST /media/{repoId}/action;list`: a number of items to
+ * skip (shorthand for `{ index }`), or `{ after }` to continue after that
+ * item (keyset pagination). The response's `meta.offset` echoes it in object
+ * form.
+ */
+export type MediaListOffset = number | { index: number } | { after: MediaItemId };
+
 /** Ordering for `POST /media/{repoId}/action;list`. */
 export interface MediaListOrderBy {
   /**
@@ -84,7 +95,7 @@ export interface MediaListOrderBy {
    * last regardless of `order`.
    */
   property: 'creationTime' | 'captureTime';
-  order: 'ascending' | 'descending';
+  order: SortOrder;
 }
 
 /** Body for `POST /media/{repoId}/action;list`. */
@@ -92,8 +103,9 @@ export interface MediaListQuery {
   folder: FolderReference;
   mediaType?: MediaType;
   visibility?: MediaVisibility;
-  offset?: number;
+  offset?: MediaListOffset;
   limit?: number;
+  /** Defaults to `{ property: 'creationTime', order: 'descending' }` when omitted. */
   orderBy?: MediaListOrderBy;
   /** Field selector applied to the returned media-item resources. */
   fields?: string | string[];

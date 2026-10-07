@@ -3,7 +3,7 @@ import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
 import { type FolderRefInput } from '../refs';
 import type { ReadOptions, WriteLanguageOptions } from '../types/common';
-import type { Collection, PageQuery } from '../types/envelope';
+import { isMediaItemVariantLink, type Collection, type PageQuery } from '../types/envelope';
 import type {
   CreateFolderInput,
   MediaMembership,
@@ -25,6 +25,7 @@ import type {
   TextMediaResult,
   UnresolvedReference,
 } from './folders.api';
+import type { MediaItemVariant } from './media.api';
 
 /** Folder endpoints, scoped to a single repository. */
 export class FoldersApi implements IFoldersApi {
@@ -290,4 +291,21 @@ export class FoldersApi implements IFoldersApi {
       parse: parseJson<MediaMembership[]>,
     });
   }
+
+  getCoverVariants(resource: FolderResource): MediaItemVariant[] {
+    if (!resource.links) {
+      return [];
+    }
+
+    return Object.values(resource.links)
+      .filter(isMediaItemVariantLink)
+      .filter((link) => link.rel.startsWith(COVER_VARIANT_PREFIX))
+      .map((link) => ({
+        ...link,
+        type: 'image' as const,
+        name: link.rel.substring(COVER_VARIANT_PREFIX.length),
+      }));
+  }
 }
+
+const COVER_VARIANT_PREFIX = 'cover:variant:';
