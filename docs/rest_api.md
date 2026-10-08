@@ -1293,7 +1293,9 @@ in the same operation.
 - `200 OK` — folder resource with ancestors
 - `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`
 - `404 Not Found` — parent folder not found
-- `409 Conflict` - if a folder ID specified, but a folder with this ID already exists
+- `409 Conflict` — a folder ID was specified, but a folder with this ID already exists
+  (`urn:bootstrap:error:folder-already-exists`), or the parent already has a folder with this name
+  (`urn:bootstrap:error:folder-path-conflict`)
 - `422 Unprocessable Entity` — invalid parent reference, or a `cover` (which the new folder cannot contain yet)
 
 ---
@@ -1361,7 +1363,8 @@ Changing `cover` or `dateRange` bumps the revision, like any other change, and s
 - `200 OK` — updated folder resource with ancestors
 - `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`
 - `404 Not Found` — the folder, or (`urn:bootstrap:error:media-item-not-found`) the `cover` item
-- `409 Conflict` — revision mismatch
+- `409 Conflict` — revision mismatch, or (`urn:bootstrap:error:folder-path-conflict`) a rename or move onto the path
+  of an existing folder
 - `422 Unprocessable Entity` — e.g. a `cover` that is not an image, is `restricted`, or is not in the folder or its
   subfolders (`urn:bootstrap:error:validation-failed`, title `Invalid Folder Cover`)
 
@@ -1786,15 +1789,31 @@ Each patch is one of:
 
 | Form | Effect |
 | --- | --- |
-| `{ "op": "add", "id": "<uuid>", "filename": "<name>" }` | Link the media item under the given filename, appended to the end of the folder's custom order. The same media item may be linked under several different filenames. |
+| `{ "op": "add", "id": "<uuid>", "filename": "<name>", "onConflict": "fail" \| "rename" }` | Link the media item, appended to the end of the folder's custom order. `filename` and `onConflict` are optional; see "Naming added items" below. The same media item may be linked under several different filenames. |
 | `{ "op": "remove", "filename": "<name>" }` | Unlink whichever media item is linked under that filename. No-op if no such link. |
 | `{ "op": "move", "filename": "<name>", "afterFilename": "<name>" \| null }` | Repositions the link within the folder's custom order: moves it to immediately after whichever item is linked under `afterFilename`, or to the very front of the order when `afterFilename` is `null`/omitted. |
+
+#### Naming added items
+
+A media item has no name of its own, only the filenames it is linked under in each folder. An `add` without
+`filename` (for example for an item taken from `POST /media/{repoId}/action;list`) uses the item's
+`originalFilename`: the name it was first uploaded under (see the media item resource). An item without one is named
+by its id and the extension of its media type, e.g. `<uuid>.jpg`.
+
+`onConflict` decides what happens when the name is already linked in the folder:
+
+- `fail` (the default when `filename` is given): the request fails with `409`.
+- `rename` (the default when `filename` is omitted): the item is linked under the first free name of the form
+  `IMG_1234 (2).jpg`, `IMG_1234 (3).jpg`, and so on.
+
+The response lists the filenames actually assigned.
 
 #### Request body
 
 ```json
 [
   { "op": "add", "id": "<media-item-uuid>", "filename": "third.JPG" },
+  { "op": "add", "id": "<media-item-uuid>" },
   { "op": "remove", "filename": "second.JPG" },
   { "op": "move", "filename": "first.JPG", "afterFilename": "third.JPG" }
 ]
@@ -1807,7 +1826,7 @@ Each patch is one of:
 - `403 Forbidden` — caller lacks write permission on the folder
 - `404 Not Found` — the folder, or (for an `add`) the media item, or (for a `move`) `filename`/`afterFilename` does not
   resolve to a link in the folder
-- `409 Conflict` — an `add` would create a duplicate filename
+- `409 Conflict` — an `add` would create a duplicate filename (and `onConflict` is `fail`)
 
 ---
 
@@ -1872,8 +1891,8 @@ Returns metadata and HAL-style links to all available variants for a media item.
 
 #### Query parameters
 
-- `fields` (optional) — comma-separated field selector. Selects among `type`, `visibility`, `originalHash`, and
-  `metadata` (`id` is always included). Defaults to every field **except** `metadata`: populating `metadata` requires
+- `fields` (optional) — comma-separated field selector. Selects among `type`, `visibility`, `originalHash`,
+  `originalFilename`, and `metadata` (`id` is always included). Defaults to every field **except** `metadata`: populating `metadata` requires
   an extra DB lookup of the item's extracted facts (see `docs/media_metadata.md`), so it is opt-in via
   `?fields=metadata` (or `?fields=type,visibility,originalHash,metadata` to get it alongside the defaults) rather than
   returned unconditionally. This selector applies to every endpoint below that returns a media-item resource,
@@ -1881,6 +1900,16 @@ Returns metadata and HAL-style links to all available variants for a media item.
   entries (there, selected via the JSON body's `fields`, like `POST /repos;query`).
 
 Each image-variant link carries the variant's `rel`, `href`, and rendered `width`/`height`. The primary variant link (`image:variant:primary`) additionally carries a `hash` field — the lowercase hex SHA-256 of the primary blob's file. The `hash` field is present only on the primary variant; scaled variants omit it.
+
+Variants keep the image's aspect ratio and are never cropped. Each is scaled down to fit within its configured size
+(`images.sizes`; the primary variant within the largest one), turned to the image's orientation, so a portrait photo's
+long edge is bounded by the size's width: a 3456×5184 photo gets a 1440×2160 primary variant under a 2560×1440 size.
+
+The `data` object's `originalFilename` field is the name the item was first uploaded under: the `{filename}` of
+`PUT /media/{repoId}/{folderVar}/{filename}`, or the `Content-Disposition` filename of
+`PUT /media/{repoId}/mid;{mediaItemId}`. It is absent when the upload carried no name. It never changes, even when the
+item is linked into folders under other filenames, and it need not be unique. It is the default filename when the item
+is added to a folder without one (see `PATCH /folders/{repoId}/{folderVar}/media`).
 
 The `data` object's `originalHash` field is the lowercase hex SHA-256 of the item's **original** blob (the uploaded source). This is distinct from the primary variant link's `hash`, which is the hash of the rendered primary blob (the derivation master, which may differ from the original).
 
@@ -1901,6 +1930,7 @@ the extraction pipeline does not currently parse it (see `docs/media_metadata.md
   "meta": { "revision": "…" },
   "data": {
     "id": "…", "type": "image", "visibility": "private", "originalHash": "<sha256-hex>",
+    "originalFilename": "DSC_0042.JPG",
     "metadata": {
       "captureTime": {
         "local": "2026-08-23T17:42:11.384",
@@ -2068,6 +2098,10 @@ challenge, and the item is created without transferring the bytes. See "Upload c
   (`urn:bootstrap:error:digest-mismatch`) without recording anything. Other digest algorithms in the header are
   ignored.
 - `Possession-Proof: challenge="<token>", response="<hex>"` — only on an upload claim; see below.
+- `Content-Disposition: attachment; filename="<name>"` (optional; `filename*=UTF-8''<percent-encoded>` per
+  [RFC 6266](https://www.rfc-editor.org/rfc/rfc6266) takes precedence) — the file's name, recorded as the new item's
+  `originalFilename`. Any directory part is dropped. A blank name or one longer than 250 characters is a `400`. Ignored
+  when the item already exists. Also accepted on an upload claim.
 
 #### Request body
 
@@ -2077,7 +2111,7 @@ The raw binary data of the media item, or empty (`Content-Length: 0`) for an upl
 
 - `204 No Content` - the media item was created successfully; `Media-Item-Id: <uuid>` header set
 - `400 Bad Request` — `Repr-Digest` doesn't match the body (`urn:bootstrap:error:digest-mismatch`), or a malformed
-  `Repr-Digest`/`Possession-Proof` header
+  `Repr-Digest`/`Possession-Proof`/`Content-Disposition` header
 - `403 Forbidden` — insufficient permission, or an invalid possession proof
 - `409 Conflict` — media item already exists
 - `415 Unsupported Media Type`
@@ -2205,7 +2239,8 @@ tie-breaker is the media item id.
           "id": "fe181a56-2e8a-4690-98d4-864a5b87645e",
           "type": "image",
           "visibility": "normal",
-          "originalHash": "<sha256-hex>"
+          "originalHash": "<sha256-hex>",
+          "originalFilename": "IMG_1234.JPG"
       },
       "links": {
           "image:variant:hd": {

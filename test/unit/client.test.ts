@@ -931,6 +931,27 @@ describe('folders', () => {
     ]);
     expect(result[0]?.filename).toBe('second.JPG');
   });
+
+  it('sends add patches with an omitted filename and an onConflict policy', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: [
+        { id: 'm1', filename: 'IMG_1234.JPG' },
+        { id: 'm2', filename: 'IMG_1234 (2).JPG' },
+      ],
+    });
+    const client = makeClient(mock);
+
+    const result = await client.folders('repo1').patchMedia(FolderById(), [
+      { op: 'add', id: 'm1', filename: 'IMG_1234.JPG', onConflict: 'rename' },
+      { op: 'add', id: 'm2' },
+    ]);
+    expect(JSON.parse(mock.last.body!)).toEqual([
+      { op: 'add', id: 'm1', filename: 'IMG_1234.JPG', onConflict: 'rename' },
+      { op: 'add', id: 'm2' },
+    ]);
+    expect(result[1]?.filename).toBe('IMG_1234 (2).JPG');
+  });
 });
 
 describe('media', () => {

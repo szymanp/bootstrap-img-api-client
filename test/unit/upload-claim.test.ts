@@ -121,6 +121,26 @@ describe('uploadById with Repr-Digest and upload claims', () => {
     expect(mock.last.headers.has('repr-digest')).toBe(false);
   });
 
+  it('sends the filename as Content-Disposition on a full upload', async () => {
+    const mock = new MockFetch().enqueue({ status: 204, headers: { 'media-item-id': 'm1' } });
+    await makeClient(mock).media('repo1').uploadById('m1', file, 'image/jpeg', { filename: 'DSC_0042.JPG' });
+    expect(mock.last.headers.get('content-disposition')).toBe('attachment; filename="DSC_0042.JPG"');
+  });
+
+  it('adds an RFC 8187 filename* for a non-ASCII filename', async () => {
+    const mock = new MockFetch().enqueue({ status: 204, headers: { 'media-item-id': 'm1' } });
+    await makeClient(mock).media('repo1').uploadById('m1', file, 'image/jpeg', { filename: 'Zdjęcie "1".jpg' });
+    expect(mock.last.headers.get('content-disposition')).toBe(
+      `attachment; filename="Zdj_cie \\"1\\".jpg"; filename*=UTF-8''Zdj%C4%99cie%20%221%22.jpg`,
+    );
+  });
+
+  it('omits Content-Disposition without a filename', async () => {
+    const mock = new MockFetch().enqueue({ status: 204, headers: { 'media-item-id': 'm1' } });
+    await makeClient(mock).media('repo1').uploadById('m1', file, 'image/jpeg');
+    expect(mock.last.headers.has('content-disposition')).toBe(false);
+  });
+
   it('surfaces a digest mismatch as an ApiError', async () => {
     const mock = new MockFetch().enqueue(problem(ErrorType.DigestMismatch, 400));
     const err = await makeClient(mock)
@@ -153,9 +173,12 @@ describe('uploadById with Repr-Digest and upload claims', () => {
     );
     const result = await makeClient(mock)
       .media('repo1')
-      .uploadById('m1', new Blob([file]), 'image/jpeg', { sha256: fileSha256, claim: true });
+      .uploadById('m1', new Blob([file]), 'image/jpeg', { sha256: fileSha256, claim: true, filename: 'a.jpg' });
 
     expect(mock.requests).toHaveLength(2);
+    for (const req of mock.requests) {
+      expect(req.headers.get('content-disposition')).toBe('attachment; filename="a.jpg"');
+    }
     const proofReq = mock.requests[1]!;
     expect(proofReq.method).toBe('PUT');
     expect(proofReq.url).toBe(url);

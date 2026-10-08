@@ -68,6 +68,13 @@ export interface MediaMetadata {
   /** The hash of the original blob associated with this media item. */
   originalHash: string;
   /**
+   * The name the item was first uploaded under (the folder upload's filename,
+   * or the `Content-Disposition` filename of an upload by id); absent when the
+   * upload carried no name. Never changes and need not be unique. It is the
+   * default filename when the item is added to a folder without one.
+   */
+  originalFilename?: string;
+  /**
    * Extracted common properties; absent until metadata extraction has
    * populated anything at all. Only returned when requested via the
    * `fields` selector (see {@link IMediaApi.metadata}).

@@ -55,9 +55,16 @@ export interface IMediaApi {
    * - `403` {@link ErrorType.PossessionProofInvalid} — wrong or expired proof.
    * - `409` — an item with this id exists with a different hash.
    *
-   * {@link uploadById} with `claim: true` runs this whole flow.
+   * `filename` is sent as `Content-Disposition` and recorded as the new
+   * item's `originalFilename`. {@link uploadById} with `claim: true` runs this
+   * whole flow.
    */
-  claimById(mediaItemId: MediaItemId, sha256: Sha256Input, proof?: PossessionProof): Promise<UploadResult>;
+  claimById(
+    mediaItemId: MediaItemId,
+    sha256: Sha256Input,
+    proof?: PossessionProof,
+    filename?: string,
+  ): Promise<UploadResult>;
 
   /**
    * Download a media binary. Returns `{ notModified: true }` when a conditional
@@ -71,7 +78,7 @@ export interface IMediaApi {
 
   /**
    * Read a media item's metadata and variant links. `fields` selects among
-   * `type`, `visibility`, `originalHash`, and `metadata` (`id` is always
+   * `type`, `visibility`, `originalHash`, `originalFilename`, and `metadata` (`id` is always
    * included); defaults to every field except `metadata`, which requires an
    * extra DB lookup and must be requested explicitly.
    */
@@ -135,6 +142,13 @@ export interface UploadByIdOptions {
    * a claim, the proof is rejected, or Web Crypto isn't available.
    */
   claim?: boolean;
+  /**
+   * The file's name, sent as `Content-Disposition` (also on a claim) and
+   * recorded as the new item's `originalFilename`; any directory part is
+   * dropped by the server. Ignored when the item already exists. A blank name
+   * or one longer than 250 characters is a `400`.
+   */
+  filename?: string;
 }
 
 /** An answered possession-proof challenge, for {@link IMediaApi.claimById}. */

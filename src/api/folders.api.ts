@@ -144,7 +144,9 @@ export interface IFoldersApi {
   /**
    * Apply an ordered list of membership patches (`add`, `remove`, or `move` —
    * see {@link MediaMembershipPatch}); returns the resulting membership in
-   * the folder's custom order.
+   * the folder's custom order, with the filenames actually assigned to added
+   * items. Throws `ApiError` 409 when an `add` hits a linked name and its
+   * `onConflict` is `fail`.
    */
   patchMedia(ref: FolderRefInput, patches: MediaMembershipPatch[]): Promise<MediaMembership[]>;
 

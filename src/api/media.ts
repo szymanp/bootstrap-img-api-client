@@ -6,6 +6,7 @@ import {
   type RereadableBody,
   type Sha256Input,
 } from '../http/digest';
+import { formatContentDisposition } from '../http/content-disposition';
 import { ErrorType, isApiError, type PossessionProofRequiredProblem } from '../http/errors';
 import { fieldsParam } from '../http/language';
 import { parseJson, parseText, Transport } from '../http/transport';
@@ -115,34 +116,43 @@ export class MediaApi implements IMediaApi {
     contentType: string,
     options: UploadByIdOptions = {},
   ): Promise<UploadResult> {
-    const { sha256, claim } = options;
+    const { sha256, claim, filename } = options;
     if (claim) {
       if (sha256 === undefined) throw new TypeError('uploadById: `claim` requires `sha256`.');
       if (body instanceof ReadableStream) {
         throw new TypeError('uploadById: `claim` needs a re-readable body, not a ReadableStream.');
       }
       if (subtleCrypto()) {
-        const claimed = await this.tryClaim(mediaItemId, sha256, body);
+        const claimed = await this.tryClaim(mediaItemId, sha256, body, filename);
         if (claimed) return claimed;
       }
     }
     return this.transport.request({
       method: 'PUT',
       path: (await this.links()).uploadMediaById(this.repoId, mediaItemId).href,
-      headers: { 'repr-digest': sha256 === undefined ? undefined : formatReprDigest(sha256) },
+      headers: {
+        'repr-digest': sha256 === undefined ? undefined : formatReprDigest(sha256),
+        'content-disposition': filename === undefined ? undefined : formatContentDisposition(filename),
+      },
       body: { kind: 'binary', value: body, contentType },
       parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? '', transferred: true }),
     });
   }
 
   /** Low-level upload claim: empty-body `PUT` with `Repr-Digest` and an optional proof. */
-  async claimById(mediaItemId: string, sha256: Sha256Input, proof?: PossessionProof): Promise<UploadResult> {
+  async claimById(
+    mediaItemId: string,
+    sha256: Sha256Input,
+    proof?: PossessionProof,
+    filename?: string,
+  ): Promise<UploadResult> {
     return this.transport.request({
       method: 'PUT',
       path: (await this.links()).uploadMediaById(this.repoId, mediaItemId).href,
       headers: {
         'repr-digest': formatReprDigest(sha256),
         'possession-proof': proof && formatPossessionProof(proof.challenge, proof.response),
+        'content-disposition': filename === undefined ? undefined : formatContentDisposition(filename),
       },
       parse: (res) => ({ mediaItemId: res.headers.get('media-item-id') ?? mediaItemId, transferred: false }),
     });
@@ -156,10 +166,11 @@ export class MediaApi implements IMediaApi {
     mediaItemId: string,
     sha256: Sha256Input,
     body: RereadableBody,
+    filename: string | undefined,
   ): Promise<UploadResult | undefined> {
     let challenge: PossessionProofRequiredProblem;
     try {
-      return await this.claimById(mediaItemId, sha256);
+      return await this.claimById(mediaItemId, sha256, undefined, filename);
     } catch (err) {
       if (isApiError(err, ErrorType.UploadRequired)) return undefined;
       if (!isApiError(err, ErrorType.PossessionProofRequired)) throw err;
@@ -167,7 +178,7 @@ export class MediaApi implements IMediaApi {
     }
     const response = await computePossessionProof(body, challenge);
     try {
-      return await this.claimById(mediaItemId, sha256, { challenge: challenge.challenge, response });
+      return await this.claimById(mediaItemId, sha256, { challenge: challenge.challenge, response }, filename);
     } catch (err) {
       if (isApiError(err, ErrorType.PossessionProofInvalid)) return undefined;
       throw err;
@@ -228,7 +239,7 @@ export class MediaApi implements IMediaApi {
 
   /**
    * Read a media item's metadata and variant links. `fields` selects among
-   * `type`, `visibility`, `originalHash`, and `metadata` (`id` is always
+   * `type`, `visibility`, `originalHash`, `originalFilename`, and `metadata` (`id` is always
    * included); defaults to every field except `metadata`.
    */
   async metadata(ref: MediaRef, options: Pick<ReadOptions, 'fields'> = {}): Promise<MediaResource> {

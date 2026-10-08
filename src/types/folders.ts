@@ -241,7 +241,21 @@ export type MediaMembershipQuery = MediaMembershipFilterQuery | MediaMembershipC
 
 /** A patch op applied to a folder's direct media membership. */
 export type MediaMembershipPatch =
-  | { op: 'add'; id: MediaItemId; filename: string }
+  | {
+    op: 'add';
+    id: MediaItemId;
+    /**
+     * Defaults to the item's `originalFilename`, or `<id>.<ext>` when it has
+     * none.
+     */
+    filename?: string;
+    /**
+     * When the name is already linked in the folder: `fail` with a `409`
+     * (default when `filename` is given), or `rename` to the first free
+     * `name (2).ext`, `name (3).ext`, … (default when `filename` is omitted).
+     */
+    onConflict?: 'fail' | 'rename';
+  }
   | { op: 'remove'; filename: string }
   | {
     op: 'move';
