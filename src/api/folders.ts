@@ -133,7 +133,13 @@ export class FoldersApi implements IFoldersApi {
     });
   }
 
-  /** Read the folder's full localized markdown body and its revision. */
+  /** 
+   * Read the folder's full localized markdown body and its revision.
+   * 
+   * Note that if the text is not available in the requested language, then a different language
+   * will be returned. That is, if the result's {@link FolderText.contentLanguage} does not match
+   * the requested language, then the text in the requested language was not set.
+   */
   async getText(ref: FolderRefInput, options: Pick<ReadOptions, 'acceptLanguage'> = {}): Promise<FolderText> {
     return this.transport.request({
       method: 'GET',
