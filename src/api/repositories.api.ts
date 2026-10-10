@@ -1,6 +1,7 @@
 import type { AuditLogEntry } from '../types/changelog';
 import type { ReadOptions, WriteLanguageOptions } from '../types/common';
 import type { Collection, PageQuery, Resource } from '../types/envelope';
+import type { FolderTag } from '../types/folders';
 import type { CreateMetadataSnapshotInput, MetadataSnapshotRecord } from '../types/metadata-snapshot';
 import type { MetadataSyncPlan } from '../types/metadata-sync';
 import type { CreateRepositoryInput, Repository, RepositoryId, UpdateRepositoryInput } from '../types/repositories';
@@ -90,6 +91,18 @@ export interface IRepositoriesApi {
   getChangelog(repoId: RepositoryId, query?: PageQuery): Promise<ChangelogCollection>;
 
   /**
+   * List the names of the repository's folder tags that at least one folder
+   * uses, sorted by code point. System tags (`system:*`) are never listed.
+   * The caller must be a repository owner or editor.
+   *
+   * @param repoId The repository's id.
+   * @param query Pagination offset/limit (server defaults `0`/`20`), plus an
+   * optional `startsWith` prefix (normalized like a tag name).
+   * @returns A page of tag names.
+   */
+  getTags(repoId: RepositoryId, query?: RepositoryTagsQuery): Promise<RepositoryTagsCollection>;
+
+  /**
    * Start building a metadata snapshot — a point-in-time consistent read of
    * the repository's folder/text/permissions/media metadata. Snapshot
    * creation is always asynchronous: this resolves once the server accepts
@@ -173,6 +186,15 @@ export type RepositoryResource = Resource<Repository>;
 
 /** Result of {@link IRepositoriesApi.getChangelog}. */
 export type ChangelogCollection = Collection<Resource<AuditLogEntry>>;
+
+/** Query for {@link IRepositoriesApi.getTags}. */
+export interface RepositoryTagsQuery extends PageQuery {
+  /** Lists only tags starting with this string, normalized like a tag name (NFC, lowercase). */
+  startsWith?: string;
+}
+
+/** Result of {@link IRepositoriesApi.getTags}: plain tag names, not resource envelopes. */
+export type RepositoryTagsCollection = Collection<FolderTag>;
 
 /** Result of {@link IRepositoriesApi.createMetadataSnapshot} (always `202 Accepted`). */
 export interface CreateMetadataSnapshotResult {

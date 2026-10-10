@@ -46,9 +46,10 @@ export interface IFoldersApi {
    * `query.depth` defaults to `1` (direct children only); `null` includes the
    * whole subtree. `query.folderType` keeps only folders of those types (their
    * descendants within `depth` are still walked, so a listed folder's parent may
-   * be missing). Without `offset`/`limit`, every folder is returned; paging
-   * applies after the type filter. `meta` echoes `offset` and `limit` (`null`
-   * when absent) and, when given, `depth` and `folderType`.
+   * be missing). `query.tags` keeps only folders having at least one of those
+   * tags. Without `offset`/`limit`, every folder is returned; paging applies
+   * after the type and tag filters. `meta` echoes `offset` and `limit` (`null`
+   * when absent) and, when given, `depth`, `folderType`, and `tags` (normalized).
    */
   list(
     ref: FolderRefInput,
@@ -67,7 +68,13 @@ export interface IFoldersApi {
     options?: Pick<ReadOptions, 'acceptLanguage'>,
   ): Promise<Collection<FolderResource>>;
 
-  /** Read the folder's full localized markdown body and its revision. */
+  /**
+   * Read the folder's full localized markdown body and its revision. The
+   * translation is negotiated from `Accept-Language`; when none matches,
+   * another stored translation is returned, so compare
+   * {@link FolderText.contentLanguage} with the requested language to tell.
+   * With no text stored, `text` is empty and `contentLanguage` is `null`.
+   */
   getText(ref: FolderRefInput, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<FolderText>;
 
   /**
@@ -192,7 +199,11 @@ export type TextMediaResult =
 /** Full markdown body of a folder's `text` subresource plus its metadata. */
 export interface FolderText {
   text: string;
-  /** Language the returned text is in (from `Content-Language`). */
+  /**
+   * Language the returned text is in (from `Content-Language`); may differ
+   * from the requested one when the folder has no text in it. `null` when no
+   * text is stored.
+   */
   contentLanguage: string | null;
   /** The folder's current revision (from `Revision-Id`); pass back on writes. */
   revision: string | null;

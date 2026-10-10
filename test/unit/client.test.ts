@@ -425,6 +425,22 @@ describe('repositories', () => {
     expect(result.records[0]?.data.description.type).toBe('repository_renamed');
   });
 
+  it('lists repository tags with paging and startsWith', async () => {
+    const mock = new MockFetch().enqueue({
+      json: { meta: { offset: 0, limit: 20 }, records: ['lato', 'wakacje'] },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.repos.getTags('id1', { offset: 0, limit: 20, startsWith: 'la' });
+    const url = new URL(mock.last.url);
+    expect(mock.last.method).toBe('GET');
+    expect(url.pathname).toBe('/repos/id1/tags');
+    expect(url.searchParams.get('offset')).toBe('0');
+    expect(url.searchParams.get('limit')).toBe('20');
+    expect(url.searchParams.get('startsWith')).toBe('la');
+    expect(result.records).toEqual(['lato', 'wakacje']);
+  });
+
   it('starts a metadata snapshot and parses the 202 body', async () => {
     const mock = new MockFetch().enqueue({
       status: 202,
@@ -690,6 +706,33 @@ describe('folders', () => {
     expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/path;albums/action;list');
     expect(JSON.parse(mock.last.body!)).toEqual({ query: { depth: null, folderType: ['album'] } });
     expect(res.meta.folderType).toEqual(['album']);
+  });
+
+  it('sends tags on action;list and reads them back from meta', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { offset: null, limit: null, tags: ['system:favorite', 'winter-2026'] }, records: [] },
+    });
+    const client = makeClient(mock);
+
+    const res = await client.folders('repo1').list({ path: '/albums' }, { tags: ['system:favorite', 'Winter-2026'] });
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { tags: ['system:favorite', 'Winter-2026'] } });
+    expect(res.meta.tags).toEqual(['system:favorite', 'winter-2026']);
+  });
+
+  it('sends tags in the update body and reads them from the folder', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { revision: 'r2' }, data: { id: 'f1', tags: ['system:favorite', 'winter-2026'] } },
+    });
+    const client = makeClient(mock);
+
+    const folder = await client.folders('repo1').update({ id: 'f1' }, 'r1', { tags: ['winter-2026', 'system:favorite'] });
+    expect(JSON.parse(mock.last.body!)).toMatchObject({
+      meta: { revision: 'r1' },
+      data: { tags: ['winter-2026', 'system:favorite'] },
+    });
+    expect(folder.data.tags).toEqual(['system:favorite', 'winter-2026']);
   });
 
   it('sends cover and dateRange in the update body, including null to reset', async () => {

@@ -121,6 +121,11 @@ export const serviceRootFixture: ServiceRoot = {
       template: '/repos/{repoId}/changelog',
       fields: ['repoId'],
     },
+    'repos:tags': {
+      rel: 'repos:tags',
+      template: '/repos/{repoId}/tags',
+      fields: ['repoId'],
+    },
     'repos:metadata-snapshot-create': {
       rel: 'repos:metadata-snapshot-create',
       template: '/repos/{repoId}/metadata-snapshots',

@@ -6,6 +6,7 @@ import type {
   FolderDateRangeInput,
   FolderId,
   FolderReference,
+  FolderTag,
   FolderType,
   MediaMembership,
 } from './folders';
@@ -74,6 +75,8 @@ export interface FolderSnapshotRecord {
   cover?: FolderCoverInput | null;
   /** The explicit date range, `null` when automatic — the shape `folder.create`/`folder.update` take. */
   dateRange?: FolderDateRangeInput | null;
+  /** The folder's tags, sorted — the shape `folder.create`/`folder.update` take. */
+  tags?: FolderTag[];
   texts?: Record<string, string>;
   /**
    * Effective (direct + inherited) grants, same records as `GET .../permissions`.

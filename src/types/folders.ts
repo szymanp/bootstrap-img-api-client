@@ -50,6 +50,11 @@ export interface Folder {
    */
   dateRange?: FolderDateRange | FolderDateRangeInput | null;
   /**
+   * The folder's {@link FolderTag}s, normalized and sorted by code point. Also
+   * present in `original` and on `related.ancestors` entries.
+   */
+  tags?: FolderTag[];
+  /**
    * Number of distinct media items the folder exposes (its own and all its
    * subfolders'), of any type or visibility. Omitted in `original`.
    */
@@ -87,6 +92,22 @@ export interface FolderDateRangeInput {
   end: string;
 }
 
+/**
+ * A folder tag. Tags belong to the repository (a tag exists while a folder uses
+ * it) and apply only to the folder they're assigned to, not its descendants.
+ *
+ * The server normalizes every tag it receives: NFC, locale-independent
+ * lowercase, NFC again, then a `system:` prefix is split off. The remaining
+ * name must be 1–100 code points, each a Unicode letter or number, `_`, `-`,
+ * or a combining mark following one of those; anything else (spaces, other
+ * punctuation, symbols) fails the whole request with a 400
+ * (`ErrorType.ValidationFailed`). Accents are significant.
+ *
+ * A `system:<name>` tag (e.g. `system:favorite`) behaves like any other, but
+ * clients treat it specially and `GET /repos/{repoId}/tags` doesn't list it.
+ */
+export type FolderTag = string;
+
 /** Ancestor chain attached to single-folder responses (root down to parent). */
 export interface FolderRelated {
   ancestors?: Resource<Folder>[];
@@ -118,6 +139,8 @@ export interface CreateFolderInput {
   cover?: FolderCoverInput | null;
   /** Explicit date range; `null`/omitted means automatic. `start` after `end` is a 400. */
   dateRange?: FolderDateRangeInput | null;
+  /** The new folder's {@link FolderTag}s; an invalid tag is a 400. */
+  tags?: FolderTag[];
 }
 
 /** Mutable fields for `POST /folders/{repoId}/{folderVar}` (update). All optional. */
@@ -145,6 +168,12 @@ export interface UpdateFolderInput {
    * checked against the folder's media. `start` after `end` is a 400.
    */
   dateRange?: FolderDateRangeInput | null;
+  /**
+   * Sets the folder's {@link FolderTag}s to exactly these; `[]` removes them
+   * all. A tag repeated after normalization counts once. An invalid tag is a
+   * 400 (`null` is not accepted). Bumps the revision when the set changes.
+   */
+  tags?: FolderTag[];
 }
 
 /** A permission change sent to `PATCH .../permissions`. */
@@ -296,4 +325,10 @@ export interface FolderListQuery extends PageQuery {
    * `depth` are still listed. Every type when omitted. Paging applies after it.
    */
   folderType?: FolderType[];
+  /**
+   * Lists only folders having at least one of these {@link FolderTag}s
+   * (unknown tags match nothing). Not filtered by tag when omitted or empty.
+   * Paging applies after it; an invalid tag is a 400.
+   */
+  tags?: FolderTag[];
 }

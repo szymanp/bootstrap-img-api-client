@@ -168,6 +168,7 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `repos:update` | template | `POST /repos/{repoId}` |
 | `repos:delete` | template | `DELETE /repos/{repoId}` |
 | `repos:changelog` | template | `GET /repos/{repoId}/changelog` |
+| `repos:tags` | template | `GET /repos/{repoId}/tags` |
 | `repos:metadata-snapshot-create` | template | `POST /repos/{repoId}/metadata-snapshots` |
 | `repos:metadata-snapshot-read` | template | `GET /repos/{repoId}/metadata-snapshots/{snapshotId}` |
 | `repos:metadata-sync` | template | `POST /repos/{repoId}/metadata-sync` |
@@ -630,9 +631,38 @@ one entry. Its data is `{ "oldOrganization", "oldName", "newOrganization", "newN
 is absent when the repository had or has no organization. A move into an organization therefore has
 `oldName == newName`.
 
+`folder_tags_changed` records a change of a folder's [tags](#tags): `{ "folderId", "added", "removed" }`, with the
+added and removed tags sorted. It is recorded only when the folder's set of tags actually changes.
+
 #### Responses
 
 - `200 OK`
+- `403 Forbidden` — caller is not an owner or editor of the repository
+- `404 Not Found`
+
+---
+
+### GET /repos/{repoId}/tags
+
+Lists the names of the repository's [tags](#tags) that at least one folder uses, sorted by code point. System tags
+are never listed. The caller must be a repository owner or editor.
+
+#### Query parameters
+
+- `offset` (optional, default `0`)
+- `limit` (optional, default `20`)
+- `startsWith` (optional) — lists only the tags starting with this string, normalized like a tag name (NFC, lowercase)
+
+#### Response body
+
+```json
+{ "meta": { "offset": 0, "limit": 20 }, "records": ["lato", "wakacje"] }
+```
+
+#### Responses
+
+- `200 OK`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a negative `offset`, or a `limit` below `1`
 - `403 Forbidden` — caller is not an owner or editor of the repository
 - `404 Not Found`
 
@@ -913,6 +943,8 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
       // the explicit cover and date range, null when automatic, in the shape folder.create/folder.update take
       "cover": { "id": "media-item-uuid" },
       "dateRange": null,
+      // the folder's tags, sorted, as folder.create/folder.update take them
+      "tags": ["system:favorite", "winter-2026"],
       "texts": { "en-us": "…" },
       // effective (direct + inherited) grants, same records as GET .../permissions — see below
       "permissions": [
@@ -1008,11 +1040,11 @@ send an object to set specific languages.
 - `permissions` — the same patch array `PATCH .../permissions` accepts (requires the repository **owner** role).
 - `media` — the same patch array `PATCH .../media` accepts.
 
-It also accepts `cover` and `dateRange`, as on `POST /folders/{repoId}`. Unlike there, a `cover` can be valid: it is
+It also accepts `cover`, `dateRange`, and `tags`, as on `POST /folders/{repoId}`. Unlike there, a `cover` can be valid: it is
 checked after the operation's `media` patches, so a plan can link an item into the new folder and make it the
 cover.
 
-`folder.update`'s `changes.name`/`.parent`/`.title`/`.data`/`.cover`/`.dateRange` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
+`folder.update`'s `changes.name`/`.parent`/`.title`/`.data`/`.cover`/`.dateRange`/`.tags` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
 own update fields; `changes.permissions` is the same patch array `PATCH .../permissions` accepts (a `permissions`
 change additionally requires the caller to hold the repository's **owner** role, matching that endpoint); `changes.media`
 is the same patch array `PATCH .../media` accepts. `changes.texts` is `{ "put": { "<lang>": "<markdown>" }, "delete":
@@ -1256,6 +1288,27 @@ The summary fields and cover links appear on the folders returned by `GET`, crea
 `action;listroot`, and `action;tree`, but not on `related.ancestors` entries, nor on folders listed under another
 resource's `related` (`…/permissions`, `…/text/media`).
 
+### Tags
+
+A folder has zero or more tags, listed in its `data.tags` (included by default, also in the original representation
+and on `related.ancestors` entries), sorted by code point:
+
+```json
+"tags": ["system:favorite", "winter-2026"]
+```
+
+Tags belong to the repository: a tag exists while a folder uses it, and `GET /repos/{repoId}/tags` lists them. A tag
+is assigned directly to a folder; it does not apply to the folder's descendants. A tag written `system:<name>` is a
+system tag: it behaves like any other tag, but clients treat it specially (e.g. `system:favorite`), and
+`GET /repos/{repoId}/tags` does not list it.
+
+Every tag received is normalized: the whole string is converted to Unicode NFC, lowercased (independently of the
+locale), and converted to NFC again; then a `system:` prefix is split off. The rest, the name, must have 1 to 100
+code points (counted after normalization), each a Unicode letter or number, `_`, `-`, or a combining mark following
+a letter, number, or another mark. Spaces, other punctuation, symbols, and control characters are rejected. Accents
+are significant (`cafe` and `café` are different tags), and so are look-alike characters from different scripts. An
+invalid tag fails the whole request with `400` (`urn:bootstrap:error:validation-failed`).
+
 ### POST /folders/{repoId}
 
 Creates a folder under an existing parent. `Content-Language` is required.
@@ -1288,10 +1341,13 @@ The `data.id` property (a UUID sibling of `parent`/`name`/`title`/`type`, not pa
 media, so a `cover` is always rejected here; it is useful in a metadata-sync `folder.create`, which can add the media
 in the same operation.
 
+`data.tags` (optional) is a list of [tags](#tags) for the new folder.
+
 #### Responses
 
 - `200 OK` — folder resource with ancestors
-- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`, or an
+  invalid tag
 - `404 Not Found` — parent folder not found
 - `409 Conflict` — a folder ID was specified, but a folder with this ID already exists
   (`urn:bootstrap:error:folder-already-exists`), or the parent already has a folder with this name
@@ -1312,7 +1368,7 @@ Retrieves a folder.
 The `representation` parameter selects how the folder is rendered:
 
 - `standard` (the default when omitted) — the rich representation: `title` is the single translation negotiated for `Accept-Language`, the derived `textPreview` field is included when text content exists, and `related.ancestors` lists the ancestor chain.
-- `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations, derived fields (such as `textPreview` and `itemCount`) are omitted, and no `related.ancestors` section is returned. The included fields are `id`, `name`, `path`, `type`, `title`, `data`, and the explicit `cover` and `dateRange` (`null` when automatic).
+- `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations, derived fields (such as `textPreview` and `itemCount`) are omitted, and no `related.ancestors` section is returned. The included fields are `id`, `name`, `path`, `type`, `title`, `data`, the explicit `cover` and `dateRange` (`null` when automatic), and `tags`.
 
 #### Responses
 
@@ -1336,7 +1392,8 @@ Updates a folder (rename, move, change title, or replace typed content). `meta.r
     "title": "Updated Title",
     "data": { "title": "Updated Cover" },
     "cover": { "id": "<media-item-uuid>" },
-    "dateRange": { "start": "2026-08-01", "end": "2026-08-14" }
+    "dateRange": { "start": "2026-08-01", "end": "2026-08-14" },
+    "tags": ["system:favorite", "winter-2026"]
   }
 }
 ```
@@ -1355,13 +1412,16 @@ All fields under `data` are optional:
 - `dateRange` — `{ "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" }` sets the folder's explicit date range (both dates
   required, inclusive); `null` returns to the automatic range. It is not checked against the folder's media, so it may
   be wider (the whole trip, including days without photos) or narrower than the automatic one.
+- `tags` — sets the folder's [tags](#tags) to exactly the listed ones; `[]` removes them all. A tag repeated after
+  normalization counts once. `null` is rejected.
 
-Changing `cover` or `dateRange` bumps the revision, like any other change, and shows in the response at once.
+Changing `cover`, `dateRange`, or `tags` bumps the revision, like any other change, and shows in the response at once.
 
 #### Responses
 
 - `200 OK` — updated folder resource with ancestors
-- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`, an
+  invalid tag, or `tags: null`
 - `404 Not Found` — the folder, or (`urn:bootstrap:error:media-item-not-found`) the `cover` item
 - `409 Conflict` — revision mismatch, or (`urn:bootstrap:error:folder-path-conflict`) a rename or move onto the path
   of an existing folder
@@ -1413,7 +1473,7 @@ Lists the subfolders of a folder as a flat list: its direct children, or all its
 #### Request body (optional)
 
 ```json
-{ "query": { "depth": 3, "folderType": ["album"], "offset": 0, "limit": 20 } }
+{ "query": { "depth": 3, "folderType": ["album"], "tags": ["system:favorite", "winter-2026"], "offset": 0, "limit": 20 } }
 ```
 
 All fields are optional:
@@ -1423,12 +1483,14 @@ All fields are optional:
 - `folderType` — a non-empty list of folder types: only folders of one of these types are listed. It filters the
   listed folders, not the walk: a folder of another type is left out, but its descendants within `depth` are still
   listed. Without it, folders of every type are listed.
-- `offset` and `limit` — page over the list (after `folderType` has been applied). Without them, or without a request
+- `tags` — a list of [tags](#tags): only folders with at least one of them are listed. Unknown tags match nothing.
+  Without it, or with an empty list, folders are not filtered by tag.
+- `offset` and `limit` — page over the list (after `folderType` and `tags` have been applied). Without them, or without a request
   body, every folder is returned.
 
 Folders are ordered by path, so each folder comes before its own descendants; `data.path` tells their nesting apart.
 With `folderType`, a listed folder's parent may be missing from the list. The response's `meta` echoes `offset` and
-`limit` (`null` when absent) and, when given, `depth` and `folderType`:
+`limit` (`null` when absent) and, when given, `depth`, `folderType`, and `tags` (normalized, without repeats):
 
 ```json
 { "meta": { "offset": 0, "limit": 20, "depth": null, "folderType": ["album"] }, "records": [ … ] }
@@ -1437,8 +1499,8 @@ With `folderType`, a listed folder's parent may be missing from the list. The re
 #### Responses
 
 - `200 OK` — paginated array of folder resources
-- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a `depth` below `1`, an empty `folderType`, or an
-  unknown folder type
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — an invalid tag, a `depth` below `1`, an empty
+  `folderType`, or an unknown folder type
 - `404 Not Found`
 
 ---
@@ -1466,12 +1528,13 @@ absent when none was given.
 
 ### GET /folders/{repoId}/{folderVar}/text
 
-Returns the folder's full markdown body. The translation is selected from the folder's stored content using the request's `Accept-Language`; if no translation matches and no text is stored, an empty body is returned.
+Returns the folder's full markdown body. The translation is selected from the folder's stored content using the request's `Accept-Language`; if no stored translation matches, another stored one is returned. If no text is stored, an empty body is returned.
 
 #### Response headers
 
 - `Content-Type: text/markdown`
-- `Content-Language` — language of the returned text
+- `Content-Language` — the language of the returned text, which differs from the requested one when the folder has
+  no text in it; absent when no text is stored
 - `Revision-Id` — the folder's current revision (pass back on `PUT`)
 
 #### Responses

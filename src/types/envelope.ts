@@ -5,7 +5,7 @@
  * Collection responses use `{ meta, records }` (plus an optional `related` grouping).
  */
 
-import type { FolderType } from './folders';
+import type { FolderTag, FolderType } from './folders';
 
 /**
  * Opaque keyset-pagination cursor from a media list's `meta.prev`/`meta.next`.
@@ -26,6 +26,8 @@ export interface Meta {
   depth?: number | null;
   /** Requested folder types (subfolder-list responses), when given. */
   folderType?: FolderType[];
+  /** Requested tags (subfolder-list responses), normalized and without repeats, when given. */
+  tags?: FolderTag[];
   /** Cursor continuing before the page's first entry (media lists); absent when nothing comes before it. */
   prev?: PageCursor;
   /** Cursor continuing after the page's last entry (media lists); absent when nothing comes after it. */

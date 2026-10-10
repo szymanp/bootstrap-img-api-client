@@ -103,7 +103,7 @@ export class FoldersApi implements IFoldersApi {
     });
   }
 
-  /** List a folder's subfolders flat, ordered by path: down to `query.depth`, optionally filtered by `query.folderType`. */
+  /** List a folder's subfolders flat, ordered by path: down to `query.depth`, optionally filtered by `query.folderType`/`query.tags`. */
   async list(
     ref: FolderRefInput,
     query: FolderListQuery = {},

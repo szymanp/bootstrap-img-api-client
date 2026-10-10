@@ -15,6 +15,9 @@ export interface AuditLogEntry {
    * `repository_renamed` covers a change of name, organization, or both, with
    * data `{ oldOrganization?, oldName, newOrganization?, newName }` (an
    * organization field is absent when there was/is none).
+   *
+   * `folder_tags_changed` records a change of a folder's set of tags, with
+   * data `{ folderId, added, removed }` (both lists sorted).
    */
   description: { type: string; data: Record<string, unknown> };
 }

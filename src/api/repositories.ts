@@ -17,6 +17,8 @@ import type {
   MetadataSnapshotResult,
   MetadataSyncResult,
   RepositoryResource,
+  RepositoryTagsCollection,
+  RepositoryTagsQuery,
 } from './repositories.api';
 
 /** Repository endpoints. */
@@ -129,6 +131,19 @@ export class RepositoriesApi implements IRepositoriesApi {
       path: (await this.links()).changelog(repoId).href,
       query: { offset: query.offset, limit: query.limit },
       parse: parseJson<ChangelogCollection>,
+    });
+  }
+
+  /**
+   * List the names of the repository's folder tags in use, sorted; system
+   * tags are never listed. The caller must be a repository owner or editor.
+   */
+  async getTags(repoId: string, query: RepositoryTagsQuery = {}): Promise<RepositoryTagsCollection> {
+    return this.transport.request({
+      method: 'GET',
+      path: (await this.links()).repoTags(repoId).href,
+      query: { offset: query.offset, limit: query.limit, startsWith: query.startsWith },
+      parse: parseJson<RepositoryTagsCollection>,
     });
   }
 

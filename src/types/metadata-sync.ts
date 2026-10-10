@@ -4,6 +4,7 @@ import type {
   FolderDateRangeInput,
   FolderId,
   FolderReference,
+  FolderTag,
   FolderType,
   MediaMembershipPatch,
   PermissionRecord,
@@ -72,6 +73,8 @@ export interface FolderCreateOperation {
    * can link an item into the new folder and make it the cover.
    */
   cover?: FolderCoverInput | null;
+  /** The new folder's tags, as on `POST /folders/{repoId}`. */
+  tags?: FolderTag[];
 }
 
 /**
@@ -137,4 +140,6 @@ export interface FolderUpdateChanges {
    * same operation links into the folder.
    */
   cover?: FolderCoverInput | null;
+  /** As on `POST /folders/{repoId}/{folderVar}`: replaces the folder's tags; `[]` removes them all. */
+  tags?: FolderTag[];
 }

@@ -115,6 +115,11 @@ export class ServiceLinks {
     return this.resolve('repos:changelog', { repoId: encode(repoId) });
   }
 
+  /** `repos:tags` — list the folder tags used in a repository. */
+  repoTags(repoId: string): HrefLink {
+    return this.resolve('repos:tags', { repoId: encode(repoId) });
+  }
+
   /** `repos:metadata-snapshot-create` — start building a metadata snapshot. */
   createMetadataSnapshot(repoId: string): HrefLink {
     return this.resolve('repos:metadata-snapshot-create', { repoId: encode(repoId) });
