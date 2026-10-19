@@ -31,7 +31,12 @@ export type {
   FolderText,
   MediaMembershipCollection,
   PermissionsCollection,
+  PublicationPreview,
+  PublicationsCollection,
+  PublicationsMeta,
+  PublishResult,
   PutTextResult,
+  RegeneratePublicKeyResult,
   TextMediaCollection,
   TextMediaOptions,
   TextMediaRelated,
@@ -47,6 +52,18 @@ export type {
   PossessionProof,
   UploadByIdOptions,
 } from './api/media.api';
+export type {
+  IPublishedApi,
+  PublishedHref,
+  PublishedIndex,
+  PublishedIndexQuery,
+  PublishedMediaCollection,
+  PublishedMeta,
+  PublishedPageOptions,
+  PublishedPageResource,
+  PublishedText,
+  PublishedTree,
+} from './api/published.api';
 export type { IServiceRootApi, ServiceRoot } from './api/service-root.api';
 export { ServiceLinks } from './links';
 
@@ -173,6 +190,31 @@ export type {
   TreeQuery,
   UpdateFolderInput,
 } from './types/folders';
+export type {
+  FolderPublicationStatus,
+  PublicationDiagnostic,
+  PublicationDiagnosticCode,
+  PublicationDiagnosticSeverity,
+  PublicationMeta,
+  PublicationPreviewInput,
+  PublicationRef,
+  PublicationRevision,
+  PublicationRevisionNumber,
+  FolderPublicKey,
+  PublishedDirectMediaOrderBy,
+  PublishedEffectiveMediaOrderBy,
+  PublishedEntryPoints,
+  PublishedFolderListEntry,
+  PublishedMediaCursorQuery,
+  PublishedMediaFilterQuery,
+  PublishedMediaQuery,
+  PublishedPage,
+  PublishedReference,
+  PublishedReferenceStatus,
+  PublishedResolvedObject,
+  PublishedTreeRow,
+  PublishInput,
+} from './types/publishing';
 export type {
   BinaryBody,
   DownloadResult,

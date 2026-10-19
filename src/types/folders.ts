@@ -1,11 +1,19 @@
 import type { Effect, Localized, Permission, Principal, UuidString } from './common';
 import type { PageCursor, PageQuery, Resource } from './envelope';
 import type { MediaItemId, SortOrder } from './media';
+import type { FolderPublicationStatus } from './publishing';
 
-/** Folder content kinds. */
+/**
+ * Folder content kinds. `root`, `albums`, `home` (the repository's home
+ * page), and `media` are built-in: every repository has exactly one of each
+ * (`/`, `/albums`, `/home`, `/media`), no other folder of these types can be
+ * created, and they cannot be renamed, moved, or deleted (422, title
+ * `Built-in Folder`).
+ */
 export type FolderType =
   | 'root'
   | 'albums'
+  | 'home'
   | 'album'
   /** A folder which may contain other "album-collection"s and "album"s. */
   | 'album-collection'
@@ -54,6 +62,19 @@ export interface Folder {
    * present in `original` and on `related.ancestors` entries.
    */
   tags?: FolderTag[];
+  /**
+   * Whether the folder is a page of the publications that include it (its
+   * ancestors' publications); `true` unless set otherwise. A folder with
+   * `false` has no page of its own, but its media still count towards its
+   * ancestors' pages. No effect on a publication of the folder itself. Also
+   * present in `original` and on `related.ancestors` entries.
+   */
+  includeInPublication?: boolean;
+  /**
+   * The folder's publication status, present once it has a public key or has
+   * been published. Not in `original`, nor on `related.ancestors` entries.
+   */
+  publication?: FolderPublicationStatus;
   /**
    * Number of distinct media items the folder exposes (its own and all its
    * subfolders'), of any type or visibility. Omitted in `original`.
@@ -128,6 +149,7 @@ export interface CreateFolderInput {
    * translation at once (`{}` creates a folder with no title).
    */
   title: Localized;
+  /** Not one of the built-in types (`root`/`albums`/`home`/`media`): that is a 422. */
   type: FolderType;
   /** Optional typed content; defaults to `{}` when omitted. */
   data?: Record<string, unknown>;
@@ -141,6 +163,8 @@ export interface CreateFolderInput {
   dateRange?: FolderDateRangeInput | null;
   /** The new folder's {@link FolderTag}s; an invalid tag is a 400. */
   tags?: FolderTag[];
+  /** The folder's {@link Folder.includeInPublication}; `true` when omitted. */
+  includeInPublication?: boolean;
 }
 
 /** Mutable fields for `POST /folders/{repoId}/{folderVar}` (update). All optional. */
@@ -174,6 +198,8 @@ export interface UpdateFolderInput {
    * 400 (`null` is not accepted). Bumps the revision when the set changes.
    */
   tags?: FolderTag[];
+  /** Sets the folder's {@link Folder.includeInPublication} (`null` is a 400). Bumps the revision. */
+  includeInPublication?: boolean;
 }
 
 /** A permission change sent to `PATCH .../permissions`. */

@@ -62,7 +62,7 @@ export interface FolderSnapshotRecord {
   type: 'folder';
   id: FolderId;
   revision: string;
-  /** `{ path: "/albums" }` when the *parent's* type is root/albums/media, else `{ id: "<uuid>" }`. */
+  /** `{ path: "/albums" }` when the parent is a built-in folder (root/albums/home/media), else `{ id: "<uuid>" }`. */
   parent?: FolderReference;
   name: string;
   /**
@@ -77,6 +77,8 @@ export interface FolderSnapshotRecord {
   dateRange?: FolderDateRangeInput | null;
   /** The folder's tags, sorted — the shape `folder.create`/`folder.update` take. */
   tags?: FolderTag[];
+  /** The folder's inclusion in publications — the shape `folder.create`/`folder.update` take. */
+  includeInPublication?: boolean;
   texts?: Record<string, string>;
   /**
    * Effective (direct + inherited) grants, same records as `GET .../permissions`.

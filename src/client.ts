@@ -6,6 +6,8 @@ import { MediaApi } from './api/media';
 import type { IMediaApi } from './api/media.api';
 import { OrganizationsApi } from './api/organizations';
 import type { IOrganizationsApi } from './api/organizations.api';
+import { PublishedApi } from './api/published';
+import type { IPublishedApi } from './api/published.api';
 import { RepositoriesApi } from './api/repositories';
 import type { IRepositoriesApi } from './api/repositories.api';
 import { ServiceRootApi } from './api/service-root';
@@ -69,5 +71,10 @@ export class BootstrapClient {
   /** Media-item endpoints scoped to a repository. */
   media(repoId: string): IMediaApi {
     return new MediaApi(this.transport, repoId, this.links);
+  }
+
+  /** Published-content (Viewer) endpoints scoped to a repository. */
+  published(repoId: string): IPublishedApi {
+    return new PublishedApi(this.transport, repoId, this.links);
   }
 }

@@ -9,8 +9,15 @@ export interface AuditLogEntry {
   /**
    * `type` is one of the audit event kinds (`repository_created`,
    * `repository_renamed`, `repository_title_changed`, `owner_added`/
-   * `owner_removed`, `editor_added`/`editor_removed`, or one of the
-   * `folder_*` events); `data` carries that event's own fields.
+   * `owner_removed`, `editor_added`/`editor_removed`, one of the
+   * `folder_*` events, or a publishing event); `data` carries that event's
+   * own fields.
+   *
+   * Publishing events: `publication_created` `{ folderId, revision,
+   * setAsDefault }`, `publication_deleted` `{ folderId, revision }`,
+   * `publication_default_changed` `{ folderId, revision }` (`revision` is
+   * `null` when cleared), and `folder_public_key_regenerated` `{ folderId,
+   * publicKey }`. They don't advance the metadata `repositoryVersion`.
    *
    * `repository_renamed` covers a change of name, organization, or both, with
    * data `{ oldOrganization?, oldName, newOrganization?, newName }` (an

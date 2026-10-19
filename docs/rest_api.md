@@ -118,6 +118,7 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:upload-required` | 422 |
 | `urn:bootstrap:error:possession-proof-required` | 428 |
 | `urn:bootstrap:error:metadata-snapshot-failed` | 410 |
+| `urn:bootstrap:error:publication-not-found` | 404 |
 | `urn:bootstrap:error:internal-error` | 500 |
 
 ---
@@ -205,6 +206,26 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `folders:query-media` | template | `POST /folders/{repoId}/{folderIdOrPath}/media;query` |
 | `folders:replace-media` | template | `PUT /folders/{repoId}/{folderIdOrPath}/media` |
 | `folders:patch-media` | template | `PATCH /folders/{repoId}/{folderIdOrPath}/media` |
+| `folders:publication-preview` | template | `POST /folders/{repoId}/{folderIdOrPath}/publication-preview` |
+| `folders:publish` | template | `POST /folders/{repoId}/{folderIdOrPath}/publications` |
+| `folders:list-publications` | template | `GET /folders/{repoId}/{folderIdOrPath}/publications` |
+| `folders:set-default-publication` | template | `PUT /folders/{repoId}/{folderIdOrPath}/publications/default` |
+| `folders:delete-publication` | template | `DELETE /folders/{repoId}/{folderIdOrPath}/publications/{revision}` |
+| `folders:regenerate-public-key` | template | `POST /folders/{repoId}/{folderIdOrPath}/action;regenerate-public-key` |
+
+##### Published content
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `published:discover` | template | `GET /published/{repoId}` |
+| `published:index` | template | `GET /published/{repoId}/index` |
+| `published:read` | template | `GET /published/{repoId}/{publicationRootVar}` |
+| `published:text` | template | `GET /published/{repoId}/{publicationRootVar}/text` |
+| `published:sub-text` | template | `GET /published/{repoId}/{publicationRootVar}/sub/{subFolderId}/text` |
+| `published:read-sub` | template | `GET /published/{repoId}/{publicationRootVar}/sub/{subFolderId}` |
+| `published:tree` | template | `GET /published/{repoId}/{publicationRootVar}/tree` |
+| `published:query-media` | template | `POST /published/{repoId}/{publicationRootVar}/media;query` |
+| `published:query-sub-media` | template | `POST /published/{repoId}/{publicationRootVar}/sub/{subFolderId}/media;query` |
 
 ##### Media items
 
@@ -623,8 +644,10 @@ repository owner or editor.
 
 `principalId` is `null` for system-attributed events. `description.type` is one of the audit event kinds
 (`repository_created`, `repository_renamed`, `repository_title_changed`, `owner_added`/`owner_removed`,
-`editor_added`/`editor_removed`, or one of the `folder_*` events); `description.data` carries that event's own
-fields.
+`editor_added`/`editor_removed`, one of the `folder_*` events, or a [publishing](#publishing) event:
+`publication_created` `{ "folderId", "revision", "setAsDefault" }`, `publication_deleted` `{ "folderId", "revision" }`,
+`publication_default_changed` `{ "folderId", "revision" }` (`null` when cleared), `folder_public_key_regenerated`
+`{ "folderId", "publicKey" }`); `description.data` carries that event's own fields.
 
 `repository_renamed` records a change of the repository's qualified name: its `name`, its organization, or both, as
 one entry. Its data is `{ "oldOrganization", "oldName", "newOrganization", "newName" }`, where an organization field
@@ -935,7 +958,7 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
       // always present
       "id": "folder-uuid",
       "revision": "folder-revision-uuid",
-      // { "path": "/albums" } when the *parent's* type is root/albums/media, else { "id": "<uuid>" }
+      // { "path": "/albums" } when the parent is a built-in folder (root/albums/home/media), else { "id": "<uuid>" }
       "parent": { "path": "/albums" },
       "name": "narty",
       // folders.data_content (kind renamed to type) plus the folder's full localized title, verbatim
@@ -945,6 +968,7 @@ Polls a snapshot's build status, or (once ready) returns a page of its records.
       "dateRange": null,
       // the folder's tags, sorted, as folder.create/folder.update take them
       "tags": ["system:favorite", "winter-2026"],
+      "includeInPublication": true,
       "texts": { "en-us": "…" },
       // effective (direct + inherited) grants, same records as GET .../permissions — see below
       "permissions": [
@@ -1003,7 +1027,8 @@ Idempotency-Key: 0be4aa18-ee30-4f99-9025-f5f19368bb30
 ```
 
 - `If-Match` is **required**, always exactly `"repository-metadata:<repositoryVersion>"` — the same `repositoryVersion`
-  the metadata-snapshot endpoint's `meta.repositoryVersion` reports (`None` treated as version `0`). A missing or
+  the metadata-snapshot endpoint's `meta.repositoryVersion` reports (`None` treated as version `0`); publishing
+  doesn't change it. A missing or
   unparseable header is `400`; a value that doesn't match the repository's current version is a `409` "Repository
   Version Conflict" (see Responses).
 - `Idempotency-Key` is **required**: a client-generated UUID identifying this exact logical attempt. Retrying with the
@@ -1040,11 +1065,11 @@ send an object to set specific languages.
 - `permissions` — the same patch array `PATCH .../permissions` accepts (requires the repository **owner** role).
 - `media` — the same patch array `PATCH .../media` accepts.
 
-It also accepts `cover`, `dateRange`, and `tags`, as on `POST /folders/{repoId}`. Unlike there, a `cover` can be valid: it is
+It also accepts `cover`, `dateRange`, `tags`, and `includeInPublication`, as on `POST /folders/{repoId}`. Unlike there, a `cover` can be valid: it is
 checked after the operation's `media` patches, so a plan can link an item into the new folder and make it the
 cover.
 
-`folder.update`'s `changes.name`/`.parent`/`.title`/`.data`/`.cover`/`.dateRange`/`.tags` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
+`folder.update`'s `changes.name`/`.parent`/`.title`/`.data`/`.cover`/`.dateRange`/`.tags`/`.includeInPublication` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
 own update fields; `changes.permissions` is the same patch array `PATCH .../permissions` accepts (a `permissions`
 change additionally requires the caller to hold the repository's **owner** role, matching that endpoint); `changes.media`
 is the same patch array `PATCH .../media` accepts. `changes.texts` is `{ "put": { "<lang>": "<markdown>" }, "delete":
@@ -1182,7 +1207,7 @@ subtree that a `folder.delete` in the same plan removes — whether its `parent`
   name that is already taken.
 - `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`) — the plan is structurally invalid: duplicate
   `folder.create` ids, a missing `folder.create` `id`, a parent-reference cycle, a `folder.create` naming a
-  `folderType` that's a per-repository singleton (`root`/`albums`/`media`), a `folder.create`/`folder.update` placing a
+  `folderType` of a [built-in folder](#built-in-folders) (`root`/`albums`/`home`/`media`), a `folder.create`/`folder.update` placing a
   folder inside a subtree a `folder.delete` in the same plan removes, a `folder.update`/`folder.delete` of a folder created in the same plan, a
   folder targeted by more than one `folder.update`/`folder.delete`, or more than the configured maximum number of
   operations. The `errors` extension member lists every issue found, each with the zero-based indexes of the
@@ -1205,6 +1230,8 @@ subtree that a `folder.delete` in the same plan removes — whether its `parent`
   image, is `restricted`, or is not in the folder or its subfolders once the operation's media patches have applied
   (title `Invalid Folder Cover`). A `cover` naming a nonexistent media item is a `404`
   (`urn:bootstrap:error:media-item-not-found`).
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, title `Built-in Folder`) — a `folder.update`
+  renaming or moving a [built-in folder](#built-in-folders), or a `folder.delete` of one.
 - `422 Unprocessable Entity` (`urn:bootstrap:error:repository-would-have-no-owners`) — a `repository.update` op
   supplied `owners: []`.
 
@@ -1216,6 +1243,15 @@ key stays reserved for about 10 minutes (`metadata_sync.idempotency_stale_after_
 ---
 
 ## Folders
+
+### Built-in folders
+
+Every repository is created with four folders, one of each built-in type: the root `/` (type `root`), `/albums`
+(`albums`), `/home` (`home`, the repository's home page), and `/media` (`media`). No other folder of these types can be
+created, and these cannot be renamed, moved, or deleted: such a request fails with `422`
+(`urn:bootstrap:error:validation-failed`, title `Built-in Folder`). Naming a built-in folder's current name or parent
+is not a change. Everything else about them (title, data, text, tags, permissions, media) can be changed as for any
+folder.
 
 Folders are addressed with a `{folderVar}` path segment:
 
@@ -1235,7 +1271,7 @@ Single-folder responses include `related.ancestors` — an ordered list of ances
 
 Folder `data` carries a `textPreview` field (first 250 characters of the localized markdown body) when text content exists for the resolved language. Use the dedicated text subresource below to read the full body or write a new translation.
 
-Folder `data` also carries a `data` field — an arbitrary JSON object holding the folder's typed content (kind-specific properties). The shape depends on the folder's `type`; for example an `album` folder may expose `{"title": "Cover Title"}`. Unknown fields in this object are preserved round-trip. The internal `kind` discriminator is omitted from responses since it is already conveyed by `type`. A reserved `text` key, present on any folder type, carries the folder's associated object data for markdown embeds (e.g. a `::gallery` directive's definition) — see [folder_text.md](folder_text.md#associated-object-data). It is client-authored content, not derived by the server from the markdown body (the server only derives its reference index from it), and it is always wholesale-replaced along with the rest of `data`, like every other part of this field.
+Folder `data` also carries a `data` field — an arbitrary JSON object holding the folder's typed content (kind-specific properties). The shape depends on the folder's `type`; for example an `album` folder may expose `{"title": "Cover Title"}`. Unknown fields in this object are preserved round-trip. The internal `kind` discriminator is omitted from responses since it is already conveyed by `type`. A reserved `text` key, present on any folder type, carries the folder's associated object data for markdown embeds (the definitions of `::gallery` and `::folder-list` directives), stored and returned exactly as written — see [folder_text.md](folder_text.md#associated-object-data). It is client-authored content, not derived by the server from the markdown body (the server only derives its reference index from it), and it is always wholesale-replaced along with the rest of `data`, like every other part of this field.
 
 Folder `links` includes a `text` link pointing at the text subresource. When any text has been stored, the link advertises the available languages, e.g.
 
@@ -1288,6 +1324,26 @@ The summary fields and cover links appear on the folders returned by `GET`, crea
 `action;listroot`, and `action;tree`, but not on `related.ancestors` entries, nor on folders listed under another
 resource's `related` (`…/permissions`, `…/text/media`).
 
+### Publication status
+
+A folder that has a public key, or has been [published](#publishing), carries `data.publication` (included by
+default; not in the original representation, nor on `related.ancestors` entries):
+
+```json
+"publication": { "publicKey": "narty-2025-k3x9p2q", "defaultRevision": 1, "latestRevision": 3 }
+```
+
+`publicKey` is the folder's current key; `defaultRevision` and `latestRevision` are the default and the newest of its
+own publication revisions, absent when there are none (as for a subfolder that is only included in its album's
+publications).
+
+### Inclusion in publications
+
+A folder's `data.includeInPublication` (included by default, also in the original representation and on
+`related.ancestors` entries) tells whether the folder is a page of the publications that include it, i.e. of its
+ancestors' publications. It is `true` unless set otherwise. A folder with `false` has no page of its own, but its
+media still count towards its ancestors' pages. It has no effect on a publication of the folder itself.
+
 ### Tags
 
 A folder has zero or more tags, listed in its `data.tags` (included by default, also in the original representation
@@ -1328,7 +1384,8 @@ Creates a folder under an existing parent. `Content-Language` is required.
 }
 ```
 
-Valid folder types: `root`, `albums`, `album`, `album-collection`, `document`, `tag`, `media`, `media-source`, `picture`.
+Valid folder types: `root`, `albums`, `home`, `album`, `album-collection`, `document`, `tag`, `media`, `media-source`,
+`picture`. The [built-in](#built-in-folders) types `root`, `albums`, `home`, and `media` cannot be used.
 
 `title` is either a bare string, stored under the request's `Content-Language`, or a `{ "<lang>": "…" }` object
 carrying every translation at once. An empty object (`{}`) is accepted and creates a folder with no title.
@@ -1341,7 +1398,8 @@ The `data.id` property (a UUID sibling of `parent`/`name`/`title`/`type`, not pa
 media, so a `cover` is always rejected here; it is useful in a metadata-sync `folder.create`, which can add the media
 in the same operation.
 
-`data.tags` (optional) is a list of [tags](#tags) for the new folder.
+`data.tags` (optional) is a list of [tags](#tags) for the new folder. `data.includeInPublication` (optional, `true`
+by default) is the folder's [inclusion in publications](#inclusion-in-publications).
 
 #### Responses
 
@@ -1352,7 +1410,8 @@ in the same operation.
 - `409 Conflict` — a folder ID was specified, but a folder with this ID already exists
   (`urn:bootstrap:error:folder-already-exists`), or the parent already has a folder with this name
   (`urn:bootstrap:error:folder-path-conflict`)
-- `422 Unprocessable Entity` — invalid parent reference, or a `cover` (which the new folder cannot contain yet)
+- `422 Unprocessable Entity` — invalid parent reference, a `cover` (which the new folder cannot contain yet), or a
+  built-in folder type (title `Built-in Folder`)
 
 ---
 
@@ -1368,7 +1427,7 @@ Retrieves a folder.
 The `representation` parameter selects how the folder is rendered:
 
 - `standard` (the default when omitted) — the rich representation: `title` is the single translation negotiated for `Accept-Language`, the derived `textPreview` field is included when text content exists, and `related.ancestors` lists the ancestor chain.
-- `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations, derived fields (such as `textPreview` and `itemCount`) are omitted, and no `related.ancestors` section is returned. The included fields are `id`, `name`, `path`, `type`, `title`, `data`, the explicit `cover` and `dateRange` (`null` when automatic), and `tags`.
+- `original` — the canonical, language-independent representation: `title` is rendered as a `{ "<lang>": … }` object carrying **all** stored translations, derived fields (such as `textPreview` and `itemCount`) are omitted, and no `related.ancestors` section is returned. The included fields are `id`, `name`, `path`, `type`, `title`, `data`, the explicit `cover` and `dateRange` (`null` when automatic), `tags`, and `includeInPublication`.
 
 #### Responses
 
@@ -1393,7 +1452,8 @@ Updates a folder (rename, move, change title, or replace typed content). `meta.r
     "data": { "title": "Updated Cover" },
     "cover": { "id": "<media-item-uuid>" },
     "dateRange": { "start": "2026-08-01", "end": "2026-08-14" },
-    "tags": ["system:favorite", "winter-2026"]
+    "tags": ["system:favorite", "winter-2026"],
+    "includeInPublication": false
   }
 }
 ```
@@ -1414,19 +1474,22 @@ All fields under `data` are optional:
   be wider (the whole trip, including days without photos) or narrower than the automatic one.
 - `tags` — sets the folder's [tags](#tags) to exactly the listed ones; `[]` removes them all. A tag repeated after
   normalization counts once. `null` is rejected.
+- `includeInPublication` — sets the folder's [inclusion in publications](#inclusion-in-publications). `null` is
+  rejected.
 
-Changing `cover`, `dateRange`, or `tags` bumps the revision, like any other change, and shows in the response at once.
+Changing `cover`, `dateRange`, `tags`, or `includeInPublication` bumps the revision, like any other change, and shows in the response at once.
 
 #### Responses
 
 - `200 OK` — updated folder resource with ancestors
 - `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `dateRange.start` is after `dateRange.end`, an
-  invalid tag, or `tags: null`
+  invalid tag, `tags: null`, or `includeInPublication: null`
 - `404 Not Found` — the folder, or (`urn:bootstrap:error:media-item-not-found`) the `cover` item
 - `409 Conflict` — revision mismatch, or (`urn:bootstrap:error:folder-path-conflict`) a rename or move onto the path
   of an existing folder
 - `422 Unprocessable Entity` — e.g. a `cover` that is not an image, is `restricted`, or is not in the folder or its
-  subfolders (`urn:bootstrap:error:validation-failed`, title `Invalid Folder Cover`)
+  subfolders (`urn:bootstrap:error:validation-failed`, title `Invalid Folder Cover`), or a rename or move of a
+  [built-in folder](#built-in-folders) (title `Built-in Folder`)
 
 ---
 
@@ -1445,6 +1508,7 @@ Deletes a folder and all its descendants.
 - `204 No Content`
 - `404 Not Found`
 - `409 Conflict` — revision mismatch
+- `422 Unprocessable Entity` — a [built-in folder](#built-in-folders) (title `Built-in Folder`)
 
 ---
 
@@ -1548,7 +1612,7 @@ Returns the folder's full markdown body. The translation is selected from the fo
 
 Stores the request body as the folder's text content under the request's `Content-Language`. Other languages already present on the folder are preserved. Uses optimistic concurrency: the supplied revision must match the folder's current revision.
 
-The markdown body (GFM plus `::media`/`::gallery` embed directives) is scanned for references to other folders and media items (`media:`/`media-path:`/`folder:`/`folder-path:`). Every reference found is persisted — resolved, missing, or malformed alike (keyed by repository, folder, and language; the previous set for that language is cleared and replaced) — so it can be queried later via `GET …/text/media`; references that do not resolve to an existing folder/media item are still saved but reported in this response. See [folder_text.md](folder_text.md) for the reference forms, embed directives, and resolution rules.
+The markdown body (GFM plus `::media`/`::gallery`/`::folder-list` embed directives) is scanned for references to other folders and media items (`media:`/`media-path:`/`folder:`/`folder-path:`). Every reference found is persisted — resolved, missing, or malformed alike (keyed by repository, folder, and language; the previous set for that language is cleared and replaced) — so it can be queried later via `GET …/text/media`; references that do not resolve to an existing folder/media item are still saved but reported in this response. See [folder_text.md](folder_text.md) for the reference forms, embed directives, and resolution rules.
 
 #### Request body
 
@@ -1684,7 +1748,7 @@ A **principal** is one of:
 | Form | Meaning |
 | --- | --- |
 | `{ "type": "user", "email": "user@example.com" }` | A registered user, by email |
-| `{ "type": "anonymous" }` | Any unauthenticated caller |
+| `{ "type": "anonymous" }` | Every caller, logged in or not: a grant to it also applies to every user and link |
 | `{ "type": "link", "id": "<principal-uuid>" }` | A shared-link principal |
 
 Valid `permission` values: `view`, `read`, `write`, `publish`, `share`.
@@ -1893,6 +1957,443 @@ The response lists the filenames actually assigned.
 
 ---
 
+## Publishing
+
+An album or the repository's `/home` folder can be published: publishing takes a snapshot of the folder and the
+subfolders selected for inclusion (`includeInPublication`), as a numbered *publication revision*. One revision of a
+folder can be its *default*: the one viewers see. See `docs/publishing_plan.md` for the design.
+
+A published folder (the root of its publications, or a subfolder included in one) has a **public key**, its stable
+identifier in published URLs (`/published/{repoId}/{key}`): a slug of the folder's name and a random suffix, such as
+`narty-2025-k3x9p2q`. A key is allocated the first time a folder is published. Regenerating a folder's key gives it a
+new one; old keys stay valid and are never reused, even after the folder is deleted.
+
+Deleting a folder deletes the publications of which it is the root, including when it is deleted with an ancestor.
+
+The revisions of a folder have a concurrency token of their own, the **publication-set revision**: `meta.revision` of
+`GET …/publications`. Setting the default and deleting a revision require it, and every change to the revisions or
+the default gives it a new value. Publishing requires the folder's own revision instead.
+
+Publishing does not change the folder's revision, and is not a metadata change: the `publication_*` and
+`folder_public_key_regenerated` changelog entries don't advance the `repositoryVersion` of metadata snapshots and
+sync.
+
+### POST /folders/{repoId}/{folderVar}/publications
+
+Publishes the folder as a new revision. The caller needs the `publish` permission on it (owners and editors have it).
+Only albums and `/home` can be published.
+
+#### Request body
+
+```json
+{ "meta": { "revision": "<folder revision>" }, "data": { "message": "Summer edit", "setAsDefault": true } }
+```
+
+`data` and both its fields are optional: `message` describes the revision, and `setAsDefault` (default `false`) makes
+the new revision the default.
+
+The snapshot is built from the folder's current state, and checked:
+
+- **Errors** refuse the publication (`422`): an embedded object that is invalid (`object-invalid`) or of an unknown
+  type (`object-unknown`), or a query whose folder doesn't exist (`query-scope-invalid`), is a folder the publication
+  excludes (`query-scope-excluded`, for a folder list), or can't be read by the caller (`query-scope-not-readable`,
+  for a gallery).
+- **Warnings** are reported, and the Viewer shows a placeholder: a reference that is missing (`reference-missing`),
+  malformed (`reference-malformed`), or unavailable (`reference-unavailable`: a restricted media item, a folder the
+  publication excludes, or a media item from outside the folder that the caller can't read), and a directive naming
+  no object (`object-missing`).
+
+Each diagnostic is
+
+```json5
+{
+  "severity": "warning",            // or "error"
+  "code": "reference-missing",
+  "folder": "<folder-uuid>",        // the folder whose text or object it concerns
+  "language": "en-us",              // when it concerns one language's text
+  "location": "text",               // "text" or "data" (an embedded object)
+  "objectKey": "summer",            // when it concerns an embedded object
+  "reference": "folder-path:./nope",
+  "message": "folder-path:./nope: the target does not exist"
+}
+```
+
+#### Response body
+
+```json
+{
+  "meta": { "revision": "<publication-set revision>" },
+  "data": { "revision": 3, "message": "Summer edit", "createdAt": "2026-10-18T10:00:00Z", "isDefault": true },
+  "links": { "published": { "rel": "published", "href": "/published/{repoId}/narty-2025-k3x9p2q;rev=3" } },
+  "diagnostics": []
+}
+```
+
+`diagnostics` lists the warnings. Revision numbers count up from 1 and are never reused, even after a revision is
+deleted.
+
+#### Responses
+
+- `200 OK`
+- `403 Forbidden` — the caller lacks the `publish` permission
+- `404 Not Found` — no such folder
+- `409 Conflict` (`urn:bootstrap:error:revision-conflict`) — `meta.revision` isn't the folder's revision
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`) — the folder can't be published (title
+  `Invalid Publication Root`: not an album or `/home`), or the snapshot has errors (title `Publication Invalid`; the
+  `errors` extension member lists them, as diagnostics)
+
+---
+
+### POST /folders/{repoId}/{folderVar}/publication-preview
+
+Shows what publishing the folder would make now, without publishing it: the tree, one page with its text bundle, and
+every diagnostic. Nothing is written: no revision, no public key. The caller needs the `publish` permission, as for
+publishing; only albums and `/home` can be previewed.
+
+#### Request body (optional)
+
+```json
+{ "page": "<folder-uuid>", "language": "pl-pl" }
+```
+
+- `page` — the live folder whose page to render; the root by default. It must be a page of the publication.
+- `language` — the language to render the text in, if the page has text in it; else the one negotiated from
+  `Accept-Language`.
+
+#### Response body
+
+```json5
+{
+  "meta": { "canPublish": false, "language": "en-us" },
+  "tree": [
+    { "id": 0, "depth": 0, "position": 0, "group": false, "title": "Trip", "folder": "<folder-uuid>",
+      "key": "trip-k3x9p2q", "name": "trip", "type": "album" }   // `key` once the folder has one
+  ],
+  "page": { "data": { "id": 0, "folder": "<folder-uuid>", …, "cover": …, "dateRange": …, "directCount": 0,
+                      "effectiveCount": 1 },
+            "links": { "cover": …, "cover:variant:…": … } },
+  "text": { "data": …, "references": […], "objects": {…}, "related": {…} },   // as GET /published/…/text
+  "diagnostics": [ … ]                                                         // as for POST …/publications
+}
+```
+
+- `canPublish` is `false` when a diagnostic is an error: errors are reported here, not refused.
+- The rows of `tree` are those publishing would make, each with the live `folder` it comes from.
+- In `text`, a reference to a page of the preview names its row, `"page": 1`, instead of a published `folder` URL
+  (it has none yet). References to other publications and folder-list queries scoped outside resolve as when published.
+
+#### Responses
+
+- `200 OK`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — `page` isn't a page of the publication
+- `403 Forbidden` — the caller lacks the `publish` permission
+- `404 Not Found`
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, title `Invalid Publication Root`)
+
+---
+
+### GET /folders/{repoId}/{folderVar}/publications
+
+Lists the folder's publication revisions, newest first. The caller needs the `read` permission on the folder.
+
+#### Response body
+
+```json
+{
+  "meta": { "revision": "<publication-set revision>", "defaultRevision": 1, "publicKey": "narty-2025-k3x9p2q" },
+  "records": [
+    {
+      "data": { "revision": 2, "createdAt": "…", "isDefault": false },
+      "links": { "published": { "rel": "published", "href": "/published/{repoId}/narty-2025-k3x9p2q;rev=2" } }
+    },
+    {
+      "data": { "revision": 1, "message": "First", "createdAt": "…", "isDefault": true },
+      "links": { "published": { "rel": "published", "href": "/published/{repoId}/narty-2025-k3x9p2q;rev=1" } }
+    }
+  ]
+}
+```
+
+`meta.revision` is `null`, and `records` empty, for a folder never published. `defaultRevision` is absent when no
+revision is the default; `publicKey` when the folder has none.
+
+#### Responses
+
+- `200 OK`
+- `403 Forbidden` — the caller lacks the `read` permission
+- `404 Not Found`
+
+---
+
+### PUT /folders/{repoId}/{folderVar}/publications/default
+
+Sets the default revision, or clears it. The caller needs the `publish` permission.
+
+#### Request body
+
+```json
+{ "meta": { "revision": "<publication-set revision>" }, "data": { "revision": 2 } }
+```
+
+`data.revision` is required: a revision number, or `null` to clear the default.
+
+#### Response body
+
+The revisions, as for `GET …/publications`, with the new `meta.revision`.
+
+#### Responses
+
+- `200 OK`
+- `403 Forbidden`
+- `404 Not Found` — no such folder, or (`urn:bootstrap:error:publication-not-found`) no such revision
+- `409 Conflict` (`urn:bootstrap:error:revision-conflict`) — `meta.revision` isn't the current publication-set revision
+
+---
+
+### DELETE /folders/{repoId}/{folderVar}/publications/{revision}
+
+Deletes a revision. Deleting the default clears the default; no other revision becomes the default. The caller needs
+the `publish` permission.
+
+#### Request headers
+
+- `If-Match: "<publication-set revision>"` (required)
+
+#### Responses
+
+- `204 No Content`
+- `400 Bad Request` — no `If-Match`
+- `403 Forbidden`
+- `404 Not Found` — no such folder, or (`urn:bootstrap:error:publication-not-found`) no such revision
+- `409 Conflict` (`urn:bootstrap:error:revision-conflict`) — `If-Match` isn't the current publication-set revision
+
+---
+
+### POST /folders/{repoId}/{folderVar}/action;regenerate-public-key
+
+Gives the folder a new public key, for its next publications. Existing publications keep the keys they were published
+with, and every earlier key stays valid. The caller needs the `publish` permission.
+
+#### Request body
+
+```json
+{ "meta": { "revision": "<folder revision>" } }
+```
+
+#### Response body
+
+```json
+{ "meta": { "revision": "<folder revision>" }, "data": { "publicKey": "narty-zimowe-p3k8m2a" } }
+```
+
+The folder's revision doesn't change.
+
+#### Responses
+
+- `200 OK`
+- `403 Forbidden`
+- `404 Not Found`
+- `409 Conflict` (`urn:bootstrap:error:revision-conflict`) — `meta.revision` isn't the folder's revision
+
+---
+
+## Published content
+
+What the Viewer reads: the snapshots made by [publishing](#publishing). A publication is addressed by its root
+folder's public key, current or earlier, as `{publicationRootVar}`: `narty-2025-k3x9p2q` for the default revision,
+or `narty-2025-k3x9p2q;rev=2` for a revision by number. An included subfolder's page is addressed by its own public key
+under `sub/`.
+
+**Who sees what** is decided by the permissions of the live root folder, so they can change without republishing:
+`view` shows its default revision, and `read` (or a repository role) every revision. Grants on ancestors count, and
+so do grants to `anonymous`. A publication the caller may not see is answered like one that doesn't exist, with
+`404` (`urn:bootstrap:error:publication-not-found`), as is an unknown key, a folder without a default revision, or a
+subfolder the revision doesn't include as a page.
+
+Responses carry `meta.publication`, the revision shown, and every link in them names that revision (`;rev=N`), with
+the public keys the revision was published with. They are `Cache-Control: private, no-cache`, since what a caller
+sees depends on their live permissions, and localized like folder responses (`Accept-Language`).
+
+```json
+"publication": { "revision": 2, "isDefault": true, "createdAt": "2026-10-18T10:00:00Z", "message": "Summer edit" }
+```
+
+### GET /published/{repoId}
+
+The Viewer's entry points: `index`, the ["All albums" index](#get-publishedrepoidindex), and `home`, the default
+revision of the repository's `/home` page when it has one the caller may see. The Viewer shows `home`, else the
+index.
+
+```json
+{
+  "links": {
+    "index": { "rel": "index", "href": "/published/{repoId}/index" },
+    "home": { "rel": "home", "href": "/published/{repoId}/home-k3x9p2q;rev=2" }
+  }
+}
+```
+
+`404` (`urn:bootstrap:error:repository-not-found`) for an unknown repository.
+
+### GET /published/{repoId}/index
+
+The albums whose default revision the caller may see (as for every published read: `view` or `read` on the album or
+an ancestor, or a repository role), newest published first, as page resources (see the root page below). `/home` and
+other non-album publications are not listed.
+
+#### Query parameters
+
+- `limit` (optional, default `20`, at least `1`)
+- `cursor` (optional) — `meta.next` of the previous page
+
+#### Response body
+
+```json
+{ "meta": { "limit": 20, "next": "<cursor>" }, "records": [ { "meta": …, "data": …, "links": … } ] }
+```
+
+`next` is absent on the last page.
+
+### GET /published/{repoId}/{publicationRootVar}
+### GET /published/{repoId}/{publicationRootVar}/sub/{subFolderId}
+
+The root page, or an included subfolder's page.
+
+#### Response body
+
+```json
+{
+  "meta": { "publication": { "revision": 1, "isDefault": true, "createdAt": "…" } },
+  "data": {
+    "key": "narty-2025-k3x9p2q",
+    "name": "narty_2025",
+    "type": "album",
+    "title": "Narty 2025",
+    "data": {},
+    "tags": [],
+    "cover": { "id": "<media-item-uuid>", "selection": "auto" },
+    "dateRange": { "start": "2025-02-01", "end": "2025-02-08", "selection": "auto" },
+    "directCount": 12,
+    "effectiveCount": 140
+  },
+  "links": {
+    "self": { "rel": "self", "href": "/published/{repoId}/narty-2025-k3x9p2q;rev=1" },
+    "tree": { "rel": "tree", "href": "/published/{repoId}/narty-2025-k3x9p2q;rev=1/tree" },
+    "text": { "rel": "text", "href": "/published/{repoId}/narty-2025-k3x9p2q;rev=1/text" },
+    "media": { "rel": "media", "href": "/published/{repoId}/narty-2025-k3x9p2q;rev=1/media;query" },
+    "cover": { "rel": "cover", "href": "/media/{repoId}/mid;<media-item-uuid>/metadata" },
+    "cover:variant:sm": { "rel": "cover:variant:sm", "href": "/media/{repoId}/mid;<media-item-uuid>?size=sm", "width": 640, "height": 426 }
+  }
+}
+```
+
+The fields are the snapshot's, as published: the folder's `data` (with its `text` object data), tags, and summary.
+`cover` and `dateRange` are as on the folder resource, computed when published from the media published with the
+page; `directCount` and `effectiveCount` count those media. A subfolder's page also has a `root` link.
+
+### GET /published/{repoId}/{publicationRootVar}/text
+### GET /published/{repoId}/{publicationRootVar}/sub/{subFolderId}/text
+
+Everything needed to render a page's markdown, in the language negotiated from `Accept-Language` (another one when
+the page has no text in it): with this, the client resolves nothing else.
+
+#### Response body
+
+```json5
+{
+  "meta": { "publication": { … }, "language": "en-us" },   // `language` absent when the page has no text
+  "data": {
+    "markdown": "…",                                        // as written; "" when there is none
+    "objects": { "summer": { "type": "gallery", … } }      // the object definitions, as written
+  },
+  "references": [
+    { "url": "media:<uuid>", "sourceLocation": "text", "targetKind": "media", "status": "resolved", "mediaItem": "<uuid>" },
+    { "url": "folder-path:./day1", "sourceLocation": "text", "targetKind": "folder", "status": "resolved",
+      "folder": "/published/{repoId}/trip-…;rev=2/sub/day1-…" },
+    { "url": "folder-path:../nope", "sourceLocation": "text", "targetKind": "folder", "status": "missing" }
+  ],
+  "objects": {
+    "summer": { "items": ["<media-item-uuid>", …] },                                 // a gallery
+    "more": { "entries": [ { "status": "resolved", "folder": "/published/…" } ] }   // a folder list
+  },
+  "related": {
+    "mediaItems": [ /* media item resources: the referenced and gallery items */ ],
+    "folders": [ /* page resources, each identified by its `self` link: the referenced and listed pages */ ]
+  }
+}
+```
+
+- `references` lists every reference of the text and of the objects it embeds (`sourceLocation: "data"`), as
+  published. `status` is `resolved`, `missing`, `malformed`, or `unavailable`. A resolved media reference names its
+  item (`mediaItem`); a resolved folder reference names its page (`folder`), whose resource is under
+  `related.folders`.
+- A reference to a folder of this publication leads to its page in this revision. A reference to a folder outside it
+  leads to that folder's page in the **current default revision** of a publication including it, which the caller may
+  see: the folder's own publication first, else the one where it is nearest the root. It is `unavailable` when there
+  is none, and becomes available once there is, without republishing.
+- An item that has become `restricted` since publishing is `unavailable`, and left out of galleries.
+- A gallery's `items` and a folder list's `entries` are in order. A folder list whose query is scoped outside the
+  publication lists the root pages of the default revisions the caller may see under that folder, filtered and
+  ordered as its query says (newest first by default); its results follow later publishing.
+
+### GET /published/{repoId}/{publicationRootVar}/tree
+
+The publication's whole tree, unpaginated, in pre-order: every row with its place, `id` (local to the revision),
+`parentId` (absent for the root), `depth`, and `position` among its siblings. A page has its `key`, `name`, `type`,
+`title`, and a `self` link; a **group** (`"group": true`) is an excluded folder kept for the structure of its included
+descendants, with its `title` only (empty when it has none).
+
+```json
+{
+  "meta": { "publication": { … } },
+  "records": [
+    { "data": { "id": 0, "depth": 0, "position": 0, "group": false, "title": "Trip", "key": "trip-…", "name": "trip", "type": "album" },
+      "links": { "self": { "rel": "self", "href": "…" } } },
+    { "data": { "id": 1, "parentId": 0, "depth": 1, "position": 0, "group": true, "title": "Hidden" } }
+  ]
+}
+```
+
+### POST /published/{repoId}/{publicationRootVar}/media;query
+### POST /published/{repoId}/{publicationRootVar}/sub/{subFolderId}/media;query
+
+A page of a published page's media, paged as described in [Paging media lists](#paging-media-lists).
+
+#### Request body
+
+```json
+{ "query": { "membership": "effective", "orderBy": { "property": "captureTime", "order": "asc" }, "limit": 20 } }
+```
+
+- `membership` — `effective` (the default): every item the page exposes, its subfolders included, even excluded ones,
+  each once, as `POST /media/{repoId}/action;list` (order by `creationTime`, the default, newest first, or
+  `captureTime`; `relativeTo: { "id" }`). `direct`: the page's own links, as `…/media;query` (order by `custom`, the
+  default, `filename`, `creationTime`, or `captureTime`; `relativeTo: { "filename" }`).
+- `offset`, `limit` (default `30`), `relativeTo`, or a `cursor` from a previous response.
+- `fields` (beside `query`) selects the media item fields, as for `action;list`.
+
+The membership and the order of the links are the snapshot's; capture times and the media items themselves are live,
+and an item that has since become `restricted` is left out.
+
+#### Response body
+
+```json5
+{
+  "meta": { "limit": 20, "next": "<cursor>", "publication": { … } },
+  "records": [ /* media item resources, as from GET …/metadata; in the direct form, `meta.filename` too */ ]
+}
+```
+
+#### Responses
+
+- `200 OK`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — invalid paging, or a cursor made for another
+  publication or page
+- `404 Not Found` (`urn:bootstrap:error:publication-not-found`), or (`urn:bootstrap:error:media-item-not-in-list`)
+  the `relativeTo` entry isn't in the list
+
+---
+
 ## Media Items
 
 Media items are files (images or videos) stored in S3. Supported image inputs include common camera raw formats
@@ -1907,7 +2408,16 @@ They can be accessed in two ways:
 
 Folder addressing uses the same `{folderVar}` format as the Folder API. To access the media item, the user must have "read" permission to the specified folder.
 
-Items can also be addressed by stable ID using the `mid;<uuid>` prefix. To access the media item, the user must have "read" permission to any folder containing the media item, or a "view" or "read" permission to a published folder with that media item.
+Items can also be addressed by stable ID using the `mid;<uuid>` prefix. To access the media item, the user must be a
+repository owner or editor, or have "read" permission to any folder containing the media item, or see a
+[publication](#published-content) that includes it: "read" permission to the publication's root folder (or an ancestor)
+for any of its revisions, "view" permission for its default revision. Access through a publication ends when the item
+becomes `restricted`, the revision stops being the default (for "view"), or the revision is deleted. The by-ID URLs are
+the same for live and published media, so a browser caches an item once.
+
+Every media response is `Cache-Control: private, no-cache` (HLS segments: `private, max-age=300`, as they have no
+`ETag`): since access depends on live permissions, a cached copy must be revalidated, and a `304 Not Modified` is only
+sent to a caller who may still see the item.
 
 A video item itself is served **exclusively** through the `.../hls/*` endpoints below — the `?size=` query parameter
 documented under the folder+filename `GET` (and its `mid;`-addressed twin) applies only to that item route, and only

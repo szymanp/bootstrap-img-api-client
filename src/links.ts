@@ -1,5 +1,6 @@
 import { FolderRef, type FolderRefInput } from './refs';
 import { isTemplateLink, type HrefLink, type Link, type LinkSet } from './types/envelope';
+import type { PublicationRef, FolderPublicKey } from './types/publishing';
 
 /** Lazily resolves a {@link ServiceLinks} from the (cached) service root. */
 export type LinksProvider = () => Promise<ServiceLinks>;
@@ -254,6 +255,77 @@ export class ServiceLinks {
     return this.resolve('folders:patch-media', this.folderFields(repoId, folder));
   }
 
+  /** `folders:publication-preview` — preview what publishing a folder would make. */
+  previewFolderPublication(repoId: string, folder: FolderRefInput): HrefLink {
+    return this.resolve('folders:publication-preview', this.folderFields(repoId, folder));
+  }
+
+  /** `folders:publish` — publish a folder as a new revision. */
+  publishFolder(repoId: string, folder: FolderRefInput): HrefLink {
+    return this.resolve('folders:publish', this.folderFields(repoId, folder));
+  }
+
+  /** `folders:list-publications` — list a folder's publication revisions. */
+  listFolderPublications(repoId: string, folder: FolderRefInput): HrefLink {
+    return this.resolve('folders:list-publications', this.folderFields(repoId, folder));
+  }
+
+  /** `folders:set-default-publication` — set or clear a folder's default revision. */
+  setDefaultFolderPublication(repoId: string, folder: FolderRefInput): HrefLink {
+    return this.resolve('folders:set-default-publication', this.folderFields(repoId, folder));
+  }
+
+  /** `folders:delete-publication` — delete a publication revision. */
+  deleteFolderPublication(repoId: string, folder: FolderRefInput, revision: number): HrefLink {
+    return this.resolve('folders:delete-publication', {
+      ...this.folderFields(repoId, folder),
+      revision: encode(String(revision)),
+    });
+  }
+
+  /** `folders:regenerate-public-key` — give a folder a new public key. */
+  regenerateFolderPublicKey(repoId: string, folder: FolderRefInput): HrefLink {
+    return this.resolve('folders:regenerate-public-key', this.folderFields(repoId, folder));
+  }
+
+  // --- published content ---
+
+  /** `published:discover` — the Viewer's entry points (`index`, `home`). */
+  discoverPublished(repoId: string): HrefLink {
+    return this.resolve('published:discover', { repoId: encode(repoId) });
+  }
+
+  /** `published:index` — the "All albums" index. */
+  publishedIndex(repoId: string): HrefLink {
+    return this.resolve('published:index', { repoId: encode(repoId) });
+  }
+
+  /** `published:read` / `published:read-sub` — a publication's root page, or an included subfolder's. */
+  readPublished(repoId: string, publication: PublicationRef, sub?: FolderPublicKey): HrefLink {
+    return sub === undefined
+      ? this.resolve('published:read', this.publicationFields(repoId, publication))
+      : this.resolve('published:read-sub', this.publicationFields(repoId, publication, sub));
+  }
+
+  /** `published:text` / `published:sub-text` — a published page's text bundle. */
+  publishedText(repoId: string, publication: PublicationRef, sub?: FolderPublicKey): HrefLink {
+    return sub === undefined
+      ? this.resolve('published:text', this.publicationFields(repoId, publication))
+      : this.resolve('published:sub-text', this.publicationFields(repoId, publication, sub));
+  }
+
+  /** `published:tree` — a publication's whole tree. */
+  publishedTree(repoId: string, publication: PublicationRef): HrefLink {
+    return this.resolve('published:tree', this.publicationFields(repoId, publication));
+  }
+
+  /** `published:query-media` / `published:query-sub-media` — a published page's media. */
+  queryPublishedMedia(repoId: string, publication: PublicationRef, sub?: FolderPublicKey): HrefLink {
+    return sub === undefined
+      ? this.resolve('published:query-media', this.publicationFields(repoId, publication))
+      : this.resolve('published:query-sub-media', this.publicationFields(repoId, publication, sub));
+  }
+
   // --- media ---
 
   /** `media:list` — list media items in a repository. */
@@ -325,6 +397,19 @@ export class ServiceLinks {
     return { repoId: encode(repoId), folderIdOrPath: FolderRef.from(folder).toPathSegment() };
   }
 
+  private publicationFields(
+    repoId: string,
+    publication: PublicationRef,
+    sub?: FolderPublicKey,
+  ): Record<string, string> {
+    const fields: Record<string, string> = {
+      repoId: encode(repoId),
+      publicationRootVar: publicationRootSegment(publication),
+    };
+    if (sub !== undefined) fields.subFolderId = encode(sub);
+    return fields;
+  }
+
   private mediaFields(repoId: string, folder: FolderRefInput, filename: string): Record<string, string> {
     return { ...this.folderFields(repoId, folder), filename: encode(filename) };
   }
@@ -366,6 +451,13 @@ export class ServiceLinks {
 
 function encode(value: string): string {
   return encodeURIComponent(value);
+}
+
+/** The `{publicationRootVar}` segment: `<key>` (default revision) or `<key>;rev=<n>`. */
+function publicationRootSegment(publication: PublicationRef): string {
+  if (typeof publication === 'string') return encode(publication);
+  const key = encode(publication.key);
+  return publication.revision === undefined ? key : `${key};rev=${publication.revision}`;
 }
 
 /**

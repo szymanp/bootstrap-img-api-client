@@ -51,6 +51,11 @@ export const ErrorType = {
   PossessionProofRequired: 'urn:bootstrap:error:possession-proof-required',
   MetadataSnapshotFailed: 'urn:bootstrap:error:metadata-snapshot-failed',
   IdempotencyKeyReused: 'urn:bootstrap:error:idempotency-key-reused',
+  /**
+   * No such publication revision, or a publication the caller may not see
+   * (answered like one that doesn't exist).
+   */
+  PublicationNotFound: 'urn:bootstrap:error:publication-not-found',
   InternalError: 'urn:bootstrap:error:internal-error',
 } as const;
 

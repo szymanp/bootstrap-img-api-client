@@ -5,6 +5,7 @@ import {
   ErrorType,
   isApiError,
   MemoryCookieStore,
+  type HrefLink,
   type RevisionConflictProblem,
   type ValidationFailedProblem,
 } from '../../src/index';
@@ -994,6 +995,261 @@ describe('folders', () => {
       { op: 'add', id: 'm2' },
     ]);
     expect(result[1]?.filename).toBe('IMG_1234 (2).JPG');
+  });
+});
+
+describe('publishing', () => {
+  it('publishes with the folder revision and returns diagnostics', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: { revision: 'ps1' },
+        data: { revision: 3, message: 'Summer edit', createdAt: '2026-10-18T10:00:00Z', isDefault: true },
+        links: { published: { rel: 'published', href: '/published/repo1/narty-k3x9p2q;rev=3' } },
+        diagnostics: [
+          {
+            severity: 'warning',
+            code: 'reference-missing',
+            folder: 'f1',
+            location: 'text',
+            reference: 'folder-path:./nope',
+            message: 'folder-path:./nope: the target does not exist',
+          },
+        ],
+      },
+    });
+    const client = makeClient(mock);
+
+    const res = await client
+      .folders('repo1')
+      .publish({ path: '/albums/narty' }, 'r1', { message: 'Summer edit', setAsDefault: true });
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/path;albums;narty/publications');
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      meta: { revision: 'r1' },
+      data: { message: 'Summer edit', setAsDefault: true },
+    });
+    expect(res.data.revision).toBe(3);
+    expect(res.diagnostics[0]?.code).toBe('reference-missing');
+  });
+
+  it('previews a publication with an optional body', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: { meta: { canPublish: true }, tree: [], page: { data: {} }, text: {}, diagnostics: [] } },
+      { status: 200, json: { meta: { canPublish: false }, tree: [], page: { data: {} }, text: {}, diagnostics: [] } },
+    );
+    const folders = makeClient(mock).folders('repo1');
+
+    await folders.previewPublication({ id: 'f1' });
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/id;f1/publication-preview');
+    expect(mock.last.body).toBeNull();
+
+    const res = await folders.previewPublication({ id: 'f1' }, { page: 'f2', language: 'pl-pl' });
+    expect(JSON.parse(mock.last.body!)).toEqual({ page: 'f2', language: 'pl-pl' });
+    expect(res.meta.canPublish).toBe(false);
+  });
+
+  it('lists publications, sets the default, and deletes one with If-Match', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: { meta: { revision: null }, records: [] } },
+      { status: 200, json: { meta: { revision: 'ps2', defaultRevision: 2 }, records: [] } },
+      { status: 204 },
+    );
+    const folders = makeClient(mock).folders('repo1');
+
+    const empty = await folders.listPublications({ id: 'f1' });
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/id;f1/publications');
+    expect(empty.meta.revision).toBeNull();
+
+    const set = await folders.setDefaultPublication({ id: 'f1' }, 'ps1', null);
+    expect(mock.last.method).toBe('PUT');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/id;f1/publications/default');
+    expect(JSON.parse(mock.last.body!)).toEqual({ meta: { revision: 'ps1' }, data: { revision: null } });
+    expect(set.meta.defaultRevision).toBe(2);
+
+    await folders.deletePublication({ id: 'f1' }, 'ps2', 2);
+    expect(mock.last.method).toBe('DELETE');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/id;f1/publications/2');
+    expect(mock.last.headers.get('if-match')).toBe('"ps2"');
+    expect(mock.last.body).toBeNull();
+  });
+
+  it('regenerates a public key with the folder revision', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { revision: 'r1' }, data: { publicKey: 'narty-zimowe-p3k8m2a' } },
+    });
+    const res = await makeClient(mock).folders('repo1').regeneratePublicKey({ id: 'f1' }, 'r1');
+    expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/id;f1/action;regenerate-public-key');
+    expect(JSON.parse(mock.last.body!)).toEqual({ meta: { revision: 'r1' } });
+    expect(res.data.publicKey).toBe('narty-zimowe-p3k8m2a');
+  });
+
+  it('sends includeInPublication on update and reads the publication status', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: { revision: 'r2' },
+        data: { id: 'f1', includeInPublication: false, publication: { publicKey: 'k', latestRevision: 3 } },
+      },
+    });
+    const folder = await makeClient(mock).folders('repo1').update({ id: 'f1' }, 'r1', { includeInPublication: false });
+    expect(JSON.parse(mock.last.body!)).toEqual({ meta: { revision: 'r1' }, data: { includeInPublication: false } });
+    expect(folder.data.includeInPublication).toBe(false);
+    expect(folder.data.publication?.latestRevision).toBe(3);
+  });
+
+  it('surfaces publication-not-found as a typed ApiError', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 404,
+      json: { type: ErrorType.PublicationNotFound, status: 404, title: 'Publication Not Found' },
+      headers: { 'content-type': 'application/problem+json' },
+    });
+    const err = await makeClient(mock)
+      .published('repo1')
+      .get('narty-k3x9p2q')
+      .catch((e: unknown) => e);
+    expect(isApiError(err, ErrorType.PublicationNotFound)).toBe(true);
+  });
+});
+
+describe('published content', () => {
+  it('reads the entry points and pages through the index', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: { links: { index: { rel: 'index', href: '/published/repo1/index' } } } },
+      { status: 200, json: { meta: { limit: 5, next: 'c1' }, records: [] } },
+    );
+    const published = makeClient(mock).published('repo1');
+
+    const entry = await published.entryPoints();
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1');
+    expect(entry.links.home).toBeUndefined();
+
+    const page = await published.index({ limit: 5, cursor: 'c0' });
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/index?limit=5&cursor=c0');
+    expect(page.meta.next).toBe('c1');
+  });
+
+  it('addresses the default revision, a revision by number, and a subfolder page', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: { meta: { publication: { revision: 1, isDefault: true } }, data: { key: 'narty-k' } } },
+      { status: 200, json: { meta: { publication: { revision: 2, isDefault: false } }, data: {} } },
+      { status: 200, json: { meta: { publication: { revision: 2, isDefault: false } }, data: {} } },
+      { status: 200, json: { meta: { publication: { revision: 2 } }, records: [] } },
+    );
+    const published = makeClient(mock).published('repo1');
+
+    const root = await published.get('narty-k');
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k');
+    expect(root.meta.publication.revision).toBe(1);
+
+    await published.get({ key: 'narty-k', revision: 2 }, { sub: 'day1-x', acceptLanguage: 'pl-PL' });
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k;rev=2/sub/day1-x');
+    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
+
+    await published.getText({ key: 'narty-k', revision: 2 }, { sub: 'day1-x' });
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k;rev=2/sub/day1-x/text');
+
+    await published.tree({ key: 'narty-k', revision: 2 });
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k;rev=2/tree');
+  });
+
+  it('reads a page text bundle', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: { publication: { revision: 1, isDefault: true }, language: 'en-us' },
+        data: { markdown: '# Hi', objects: { summer: { type: 'gallery' } } },
+        references: [{ url: 'media:m1', sourceLocation: 'text', targetKind: 'media', status: 'resolved', mediaItem: 'm1' }],
+        objects: { summer: { items: ['m1'] } },
+        related: { mediaItems: [], folders: [] },
+      },
+    });
+    const text = await makeClient(mock).published('repo1').getText('narty-k');
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k/text');
+    expect(text.meta.language).toBe('en-us');
+    expect(text.objects.summer?.items).toEqual(['m1']);
+  });
+
+  it('follows ready-made links, keeping the revision they name', async () => {
+    const day1 = '/published/repo1/trip-k;rev=2/sub/day1-x';
+    const mock = new MockFetch().enqueue(
+      {
+        status: 200,
+        json: {
+          meta: { publication: { revision: 2 } },
+          data: { markdown: '', objects: {} },
+          references: [
+            { url: 'folder-path:./day1', sourceLocation: 'text', targetKind: 'folder', status: 'resolved', folder: day1 },
+          ],
+          objects: {},
+          related: {},
+        },
+      },
+      {
+        status: 200,
+        json: {
+          meta: { publication: { revision: 2 } },
+          data: { key: 'day1-x' },
+          links: {
+            text: { rel: 'text', href: `${day1}/text` },
+            tree: { rel: 'tree', href: '/published/repo1/trip-k;rev=2/tree' },
+            media: { rel: 'media', href: `${day1}/media;query` },
+          },
+        },
+      },
+      { status: 200, json: { meta: { publication: { revision: 2 } }, data: { markdown: '', objects: {} } } },
+      { status: 200, json: { meta: { publication: { revision: 2 } }, records: [] } },
+      { status: 200, json: { meta: { publication: { revision: 2 } }, records: [] } },
+    );
+    const published = makeClient(mock).published('repo1');
+
+    const text = await published.followText('/published/repo1/trip-k;rev=2/text', { acceptLanguage: 'pl-PL' });
+    expect(mock.last.method).toBe('GET');
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/trip-k;rev=2/text');
+    expect(mock.last.headers.get('accept-language')).toBe('pl-PL');
+
+    const page = await published.followPage(text.references[0]!.folder!);
+    expect(mock.last.url).toBe(`http://localhost:8080${day1}`);
+
+    await published.followText(page.links!.text as HrefLink);
+    expect(mock.last.url).toBe(`http://localhost:8080${day1}/text`);
+
+    await published.followTree(page.links!.tree as HrefLink);
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/trip-k;rev=2/tree');
+
+    await published.followMedia(page.links!.media as HrefLink, { limit: 20, fields: 'id' });
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.url).toBe(`http://localhost:8080${day1}/media;query`);
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { limit: 20 }, fields: 'id' });
+  });
+
+  it('queries a published page media with a wrapped query body', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: { meta: { limit: 20, next: 'c1', publication: { revision: 1 } }, records: [] } },
+      { status: 200, json: { meta: { limit: 20, publication: { revision: 1 } }, records: [] } },
+    );
+    const published = makeClient(mock).published('repo1');
+
+    const res = await published.queryMedia('narty-k', {
+      membership: 'direct',
+      orderBy: { property: 'filename', order: 'asc' },
+      limit: 20,
+      fields: ['id', 'metadata'],
+    });
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k/media;query');
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      query: { membership: 'direct', orderBy: { property: 'filename', order: 'asc' }, limit: 20 },
+      fields: 'id,metadata',
+    });
+    expect(res.meta.next).toBe('c1');
+
+    await published.queryMedia({ key: 'narty-k', revision: 1 }, { cursor: 'c1' }, { sub: 'day1-x' });
+    expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k;rev=1/sub/day1-x/media;query');
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { cursor: 'c1' } });
   });
 });
 

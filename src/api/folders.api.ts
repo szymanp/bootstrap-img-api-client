@@ -1,6 +1,6 @@
 import { type FolderRefInput } from '../refs';
 import type { ReadOptions, WriteLanguageOptions } from '../types/common';
-import type { Collection, PageQuery, Resource } from '../types/envelope';
+import type { Collection, LinkSet, Meta, PageQuery, Resource } from '../types/envelope';
 import type {
   CreateFolderInput,
   EffectivePermission,
@@ -16,7 +16,18 @@ import type {
   UpdateFolderInput,
 } from '../types/folders';
 import type { MediaMetadata } from '../types/media';
+import type {
+  PublicationDiagnostic,
+  PublicationPreviewInput,
+  PublicationRevision,
+  PublicationRevisionNumber,
+  FolderPublicKey,
+  PublishedPage,
+  PublishedTreeRow,
+  PublishInput,
+} from '../types/publishing';
 import type { MediaItemVariant } from './media.api';
+import type { PublishedText } from './published.api';
 
 /** Folder endpoints, scoped to a single repository. */
 export interface IFoldersApi {
@@ -80,7 +91,7 @@ export interface IFoldersApi {
   /**
    * Store the folder's markdown body under `Content-Language`, preserving other
    * languages. `revision` must match the folder's current revision. The body
-   * (GFM plus `::media`/`::gallery` embed directives) is scanned for
+   * (GFM plus `::media`/`::gallery`/`::folder-list` embed directives) is scanned for
    * `media:`/`media-path:`/`folder:`/`folder-path:` references: every
    * reference found is persisted (resolved, missing, or malformed alike), and
    * ones that don't resolve are also reported in
@@ -164,6 +175,64 @@ export interface IFoldersApi {
    * cover or the cover image hasn't been processed yet.
    */
   getCoverVariants(resource: FolderResource): MediaItemVariant[];
+
+  /**
+   * Publish the folder as a new revision: a snapshot of it and the subfolders
+   * selected for inclusion. Only albums and `/home` can be published; the
+   * caller needs the `publish` permission. `revision` is the folder's own
+   * revision, which publishing doesn't change. Warnings are returned in
+   * {@link PublishResult.diagnostics}; errors refuse the publication with a
+   * 422 (`ErrorType.ValidationFailed`, title `Publication Invalid`, its
+   * `errors` member listing them as {@link PublicationDiagnostic}s), and a
+   * folder that can't be published is a 422 titled `Invalid Publication Root`.
+   */
+  publish(ref: FolderRefInput, revision: string, input?: PublishInput): Promise<PublishResult>;
+
+  /**
+   * Show what publishing the folder would make now, without publishing it
+   * (no revision, no public key): the tree, one page with its text bundle, and
+   * every diagnostic. Errors are reported here, with `meta.canPublish: false`,
+   * not refused. Requires the `publish` permission.
+   */
+  previewPublication(
+    ref: FolderRefInput,
+    input?: PublicationPreviewInput,
+    options?: Pick<ReadOptions, 'acceptLanguage'>,
+  ): Promise<PublicationPreview>;
+
+  /**
+   * List the folder's publication revisions, newest first. `meta.revision` is
+   * the publication-set revision (`null` for a folder never published), the
+   * concurrency token {@link setDefaultPublication} and
+   * {@link deletePublication} require. Requires the `read` permission.
+   */
+  listPublications(ref: FolderRefInput): Promise<PublicationsCollection>;
+
+  /**
+   * Set the folder's default revision, or clear it with `null`.
+   * `setRevision` is the current publication-set revision (a 409
+   * `ErrorType.RevisionConflict` otherwise); an unknown revision is a 404
+   * `ErrorType.PublicationNotFound`. Returns the revisions with the new
+   * `meta.revision`.
+   */
+  setDefaultPublication(
+    ref: FolderRefInput,
+    setRevision: string,
+    revision: PublicationRevisionNumber | null,
+  ): Promise<PublicationsCollection>;
+
+  /**
+   * Delete a publication revision. Deleting the default clears the default.
+   * `setRevision` is the current publication-set revision, sent as `If-Match`.
+   */
+  deletePublication(ref: FolderRefInput, setRevision: string, revision: PublicationRevisionNumber): Promise<void>;
+
+  /**
+   * Give the folder a new public key for its next publications. Existing
+   * publications keep their keys, and every earlier key stays valid.
+   * `revision` is the folder's revision, which this doesn't change.
+   */
+  regeneratePublicKey(ref: FolderRefInput, revision: string): Promise<RegeneratePublicKeyResult>;
 }
 
 export type FolderResource = Resource<Folder, FolderRelated>;
@@ -173,6 +242,50 @@ export type MediaMembershipCollection = Collection<
   Resource<MediaMembership>,
   { mediaitem?: Resource<MediaMetadata>[] }
 >;
+
+/** Result of {@link IFoldersApi.publish}: the new revision, with the publication-set revision in `meta.revision`. */
+export interface PublishResult extends Resource<PublicationRevision> {
+  /** The snapshot's warnings. */
+  diagnostics: PublicationDiagnostic[];
+}
+
+/** `meta` of {@link IFoldersApi.listPublications}. */
+export interface PublicationsMeta extends Omit<Meta, 'revision'> {
+  /** The publication-set revision; `null` for a folder never published. */
+  revision: string | null;
+  /** Absent when no revision is the default. */
+  defaultRevision?: PublicationRevisionNumber;
+  /** Absent when the folder has no public key. */
+  publicKey?: FolderPublicKey;
+}
+
+/** A folder's publication revisions, newest first; each record's `links.published` leads to it. */
+export interface PublicationsCollection {
+  meta: PublicationsMeta;
+  records: Resource<PublicationRevision>[];
+}
+
+/** Result of {@link IFoldersApi.regeneratePublicKey}. */
+export type RegeneratePublicKeyResult = Resource<{ publicKey: FolderPublicKey }>;
+
+/** Result of {@link IFoldersApi.previewPublication}. */
+export interface PublicationPreview {
+  meta: Meta & {
+    /** `false` when a diagnostic is an error. */
+    canPublish: boolean;
+    language?: string;
+  };
+  /** The rows publishing would make, each with the live `folder` it comes from. */
+  tree: PublishedTreeRow[];
+  /** The rendered page. */
+  page: { data: PublishedPage; links?: LinkSet };
+  /**
+   * As from `GET /published/…/text`, except that a reference to a page of the
+   * preview names its tree row (`page`) instead of a published `folder` URL.
+   */
+  text: Omit<PublishedText, 'meta'>;
+  diagnostics: PublicationDiagnostic[];
+}
 
 /** Related resources attached to a {@link IFoldersApi.getTextMedia} response. */
 export interface TextMediaRelated {

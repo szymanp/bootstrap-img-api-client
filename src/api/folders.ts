@@ -14,13 +14,18 @@ import type {
   TreeQuery,
   UpdateFolderInput,
 } from '../types/folders';
+import type { PublicationPreviewInput, PublicationRevisionNumber, PublishInput } from '../types/publishing';
 import type {
   FolderResource,
   FolderText,
   IFoldersApi,
   MediaMembershipCollection,
   PermissionsCollection,
+  PublicationPreview,
+  PublicationsCollection,
+  PublishResult,
   PutTextResult,
+  RegeneratePublicKeyResult,
   TextMediaCollection,
   TextMediaOptions,
   TextMediaResult,
@@ -157,7 +162,7 @@ export class FoldersApi implements IFoldersApi {
   /**
    * Store the folder's markdown body under `Content-Language`, preserving other
    * languages. `revision` must match the folder's current revision. The body
-   * (GFM plus `::media`/`::gallery` embed directives) is scanned for
+   * (GFM plus `::media`/`::gallery`/`::folder-list` embed directives) is scanned for
    * `media:`/`media-path:`/`folder:`/`folder-path:` references: every
    * reference found is persisted (resolved, missing, or malformed alike), and
    * ones that don't resolve are also reported in
@@ -312,6 +317,78 @@ export class FoldersApi implements IFoldersApi {
         type: 'image' as const,
         name: link.rel.substring(COVER_VARIANT_PREFIX.length),
       }));
+  }
+
+  /** Publish the folder as a new revision (`revision` is the folder's revision). */
+  async publish(ref: FolderRefInput, revision: string, input?: PublishInput): Promise<PublishResult> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).publishFolder(this.repoId, ref).href,
+      body: { kind: 'json', value: { meta: { revision }, data: input } },
+      parse: parseJson<PublishResult>,
+    });
+  }
+
+  /** Show what publishing the folder would make now, without publishing it. */
+  async previewPublication(
+    ref: FolderRefInput,
+    input?: PublicationPreviewInput,
+    options: Pick<ReadOptions, 'acceptLanguage'> = {},
+  ): Promise<PublicationPreview> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).previewFolderPublication(this.repoId, ref).href,
+      acceptLanguage: options.acceptLanguage,
+      body: input === undefined ? undefined : { kind: 'json', value: input },
+      parse: parseJson<PublicationPreview>,
+    });
+  }
+
+  /** List the folder's publication revisions, newest first. */
+  async listPublications(ref: FolderRefInput): Promise<PublicationsCollection> {
+    return this.transport.request({
+      method: 'GET',
+      path: (await this.links()).listFolderPublications(this.repoId, ref).href,
+      parse: parseJson<PublicationsCollection>,
+    });
+  }
+
+  /** Set the folder's default revision, or clear it with `null`. */
+  async setDefaultPublication(
+    ref: FolderRefInput,
+    setRevision: string,
+    revision: PublicationRevisionNumber | null,
+  ): Promise<PublicationsCollection> {
+    return this.transport.request({
+      method: 'PUT',
+      path: (await this.links()).setDefaultFolderPublication(this.repoId, ref).href,
+      body: { kind: 'json', value: { meta: { revision: setRevision }, data: { revision } } },
+      parse: parseJson<PublicationsCollection>,
+    });
+  }
+
+  /** Delete a publication revision (`setRevision` goes in `If-Match`). */
+  async deletePublication(
+    ref: FolderRefInput,
+    setRevision: string,
+    revision: PublicationRevisionNumber,
+  ): Promise<void> {
+    return this.transport.request({
+      method: 'DELETE',
+      path: (await this.links()).deleteFolderPublication(this.repoId, ref, revision).href,
+      headers: { 'if-match': `"${setRevision}"` },
+      parse: parseVoid,
+    });
+  }
+
+  /** Give the folder a new public key for its next publications. */
+  async regeneratePublicKey(ref: FolderRefInput, revision: string): Promise<RegeneratePublicKeyResult> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).regenerateFolderPublicKey(this.repoId, ref).href,
+      body: { kind: 'json', value: { meta: { revision } } },
+      parse: parseJson<RegeneratePublicKeyResult>,
+    });
   }
 }
 

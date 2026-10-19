@@ -57,6 +57,7 @@ export interface FolderCreateOperation {
    * the server default); an object sets specific languages (`{}` allowed).
    */
   title: Localized;
+  /** Not a built-in type (`root`/`albums`/`home`/`media`): that fails the plan with `422`. */
   type: FolderType;
   data?: Record<string, unknown>;
   /** Markdown body per language, as a snapshot folder record's `texts`. */
@@ -75,6 +76,8 @@ export interface FolderCreateOperation {
   cover?: FolderCoverInput | null;
   /** The new folder's tags, as on `POST /folders/{repoId}`. */
   tags?: FolderTag[];
+  /** As on `POST /folders/{repoId}`; `true` when omitted. */
+  includeInPublication?: boolean;
 }
 
 /**
@@ -142,4 +145,6 @@ export interface FolderUpdateChanges {
   cover?: FolderCoverInput | null;
   /** As on `POST /folders/{repoId}/{folderVar}`: replaces the folder's tags; `[]` removes them all. */
   tags?: FolderTag[];
+  /** As on `POST /folders/{repoId}/{folderVar}`. */
+  includeInPublication?: boolean;
 }

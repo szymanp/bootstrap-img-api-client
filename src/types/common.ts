@@ -16,7 +16,11 @@ export type MediaItemVariantName = string;
  */
 export type Localized = string | Record<LanguageTag, string>;
 
-/** A security principal referenced in permissions and repository roles. */
+/**
+ * A security principal referenced in permissions and repository roles.
+ * `anonymous` means every caller, logged in or not: a grant to it also
+ * applies to every user and link.
+ */
 export type Principal = { type: 'user'; email: string } | { type: 'anonymous' } | { type: 'link'; id: string };
 
 /** Permissions that can be granted on a folder. */

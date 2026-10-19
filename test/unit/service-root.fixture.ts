@@ -201,6 +201,81 @@ export const serviceRootFixture: ServiceRoot = {
       template: '/media/{repoId}/{mediaItemId}/hls/master.m3u8',
       fields: ['repoId', 'mediaItemId'],
     },
+    'folders:publication-preview': {
+      rel: 'folders:publication-preview',
+      template: '/folders/{repoId}/{folderIdOrPath}/publication-preview',
+      fields: ['repoId', 'folderIdOrPath'],
+    },
+    'folders:publish': {
+      rel: 'folders:publish',
+      template: '/folders/{repoId}/{folderIdOrPath}/publications',
+      fields: ['repoId', 'folderIdOrPath'],
+    },
+    'folders:list-publications': {
+      rel: 'folders:list-publications',
+      template: '/folders/{repoId}/{folderIdOrPath}/publications',
+      fields: ['repoId', 'folderIdOrPath'],
+    },
+    'folders:set-default-publication': {
+      rel: 'folders:set-default-publication',
+      template: '/folders/{repoId}/{folderIdOrPath}/publications/default',
+      fields: ['repoId', 'folderIdOrPath'],
+    },
+    'folders:delete-publication': {
+      rel: 'folders:delete-publication',
+      template: '/folders/{repoId}/{folderIdOrPath}/publications/{revision}',
+      fields: ['repoId', 'folderIdOrPath', 'revision'],
+    },
+    'folders:regenerate-public-key': {
+      rel: 'folders:regenerate-public-key',
+      template: '/folders/{repoId}/{folderIdOrPath}/action;regenerate-public-key',
+      fields: ['repoId', 'folderIdOrPath'],
+    },
+    'published:discover': {
+      rel: 'published:discover',
+      template: '/published/{repoId}',
+      fields: ['repoId'],
+    },
+    'published:index': {
+      rel: 'published:index',
+      template: '/published/{repoId}/index',
+      fields: ['repoId'],
+    },
+    'published:read': {
+      rel: 'published:read',
+      template: '/published/{repoId}/{publicationRootVar}',
+      fields: ['repoId', 'publicationRootVar'],
+    },
+    'published:text': {
+      rel: 'published:text',
+      template: '/published/{repoId}/{publicationRootVar}/text',
+      fields: ['repoId', 'publicationRootVar'],
+    },
+    'published:sub-text': {
+      rel: 'published:sub-text',
+      template: '/published/{repoId}/{publicationRootVar}/sub/{subFolderId}/text',
+      fields: ['repoId', 'publicationRootVar', 'subFolderId'],
+    },
+    'published:read-sub': {
+      rel: 'published:read-sub',
+      template: '/published/{repoId}/{publicationRootVar}/sub/{subFolderId}',
+      fields: ['repoId', 'publicationRootVar', 'subFolderId'],
+    },
+    'published:tree': {
+      rel: 'published:tree',
+      template: '/published/{repoId}/{publicationRootVar}/tree',
+      fields: ['repoId', 'publicationRootVar'],
+    },
+    'published:query-media': {
+      rel: 'published:query-media',
+      template: '/published/{repoId}/{publicationRootVar}/media;query',
+      fields: ['repoId', 'publicationRootVar'],
+    },
+    'published:query-sub-media': {
+      rel: 'published:query-sub-media',
+      template: '/published/{repoId}/{publicationRootVar}/sub/{subFolderId}/media;query',
+      fields: ['repoId', 'publicationRootVar', 'subFolderId'],
+    },
     'folders:list': {
       rel: 'folders:list',
       template: '/folders/{repoId}/{folderIdOrPath}/action;list',
