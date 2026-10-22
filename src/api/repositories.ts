@@ -16,6 +16,7 @@ import type {
   MetadataSnapshotQuery,
   MetadataSnapshotResult,
   MetadataSyncResult,
+  RepositoryQuery,
   RepositoryResource,
   RepositoryTagsCollection,
   RepositoryTagsQuery,
@@ -47,9 +48,9 @@ export class RepositoriesApi implements IRepositoriesApi {
     });
   }
 
-  /** List repositories the caller has a role on (paginated). */
+  /** List the repositories the caller relates to (paginated). */
   async query(
-    query: PageQuery = {},
+    query: RepositoryQuery = {},
     options: Pick<ReadOptions, 'acceptLanguage' | 'fields'> = {},
   ): Promise<Collection<RepositoryResource>> {
     return this.transport.request({
@@ -117,6 +118,24 @@ export class RepositoriesApi implements IRepositoriesApi {
       method: 'DELETE',
       path: (await this.links()).deleteRepo(repoId).href,
       body: { kind: 'json', value: { revision } },
+      parse: parseVoid,
+    });
+  }
+
+  /** Follow a repository (idempotent). */
+  async follow(repoId: string): Promise<void> {
+    return this.transport.request({
+      method: 'PUT',
+      path: (await this.links()).followRepo(repoId).href,
+      parse: parseVoid,
+    });
+  }
+
+  /** Stop following a repository (idempotent). */
+  async unfollow(repoId: string): Promise<void> {
+    return this.transport.request({
+      method: 'DELETE',
+      path: (await this.links()).unfollowRepo(repoId).href,
       parse: parseVoid,
     });
   }

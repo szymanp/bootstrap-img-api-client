@@ -24,7 +24,10 @@ Authentication is **cookie-based**. The flow:
 3. The client must **store that `session` cookie and send it on every subsequent request** that requires authentication. A standard cookie jar handles this automatically.
 4. `POST /auth/action;logout` terminates the session; the response clears the cookie (`session=` with `Max-Age=0`).
 
-`GET /auth/session` reports the current session, or `401` if the cookie is missing/expired/invalid. Verifying a newly registered user (`POST /users/{userIdOrEmail}/action;verify-user`) also starts a session and sets the cookie, as in step 2. Endpoints that require a session respond `401 Unauthorized` (with `WWW-Authenticate: Cookie`) when none is present, and `403 Forbidden` when the session is valid but lacks permission. User registration/verification and `auth:*` endpoints are the only ones reachable without a session.
+Without an account, a client can log in as an **anonymous principal**: an individual identity that can hold
+permissions and survives logout (see [POST /auth](#post-auth)). Every `/auth` response is `Cache-Control: no-store`.
+
+`GET /auth/session` reports the current session, or `401` if the cookie is missing/expired/invalid. Verifying a newly registered user (`POST /users/{userIdOrEmail}/action;verify-user`) also starts a session and sets the cookie, as in step 2. Endpoints that require a session respond `401 Unauthorized` (with `WWW-Authenticate: Cookie`) when none is present, and `403 Forbidden` when the session is valid but lacks permission. Endpoints for registered users only (a user's profile and settings, organizations, and creating repositories) answer a session of any other principal with `403` (`urn:bootstrap:error:registered-user-required`). User registration/verification and `auth:*` endpoints are the only ones reachable without a session.
 
 ### Resource envelope
 
@@ -99,7 +102,7 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | --- | --- |
 | `urn:bootstrap:error:bad-request` / `:validation-failed` | 400 / 422 |
 | `urn:bootstrap:error:unauthorized` | 401 |
-| `urn:bootstrap:error:forbidden` | 403 |
+| `urn:bootstrap:error:forbidden` / `:registered-user-required` | 403 |
 | `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409 |
 | `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
 | `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
@@ -119,6 +122,8 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:possession-proof-required` | 428 |
 | `urn:bootstrap:error:metadata-snapshot-failed` | 410 |
 | `urn:bootstrap:error:publication-not-found` | 404 |
+| `urn:bootstrap:error:principal-not-found` | 404 |
+| `urn:bootstrap:error:access-link-not-found` / `:access-link-unavailable` | 404 |
 | `urn:bootstrap:error:internal-error` | 500 |
 
 ---
@@ -170,6 +175,8 @@ The complete set of `rel` keys advertised by the root, with the HTTP method and 
 | `repos:delete` | template | `DELETE /repos/{repoId}` |
 | `repos:changelog` | template | `GET /repos/{repoId}/changelog` |
 | `repos:tags` | template | `GET /repos/{repoId}/tags` |
+| `repos:follow` | template | `PUT /repos/{repoId}/following` |
+| `repos:unfollow` | template | `DELETE /repos/{repoId}/following` |
 | `repos:metadata-snapshot-create` | template | `POST /repos/{repoId}/metadata-snapshots` |
 | `repos:metadata-snapshot-read` | template | `GET /repos/{repoId}/metadata-snapshots/{snapshotId}` |
 | `repos:metadata-sync` | template | `POST /repos/{repoId}/metadata-sync` |
@@ -248,6 +255,18 @@ Variant-playlist and segment URLs are deliberately **not** advertised as root te
 the master playlist content and the `metadata` response's `video:hls:variant:*` links, the same way image `?size=`
 variant URLs are discovered today rather than built from a root template.
 
+##### Access links
+
+| `rel` | Kind | Method & target |
+| --- | --- | --- |
+| `access-links:create` | template | `POST /access-links/{repoId}` |
+| `access-links:list` | template | `GET /access-links/{repoId}` |
+| `access-links:read` | template | `GET /access-links/{repoId}/{linkId}` |
+| `access-links:deactivate` | template | `POST /access-links/{repoId}/{linkId}/action;deactivate` |
+| `access-links:delete` | template | `DELETE /access-links/{repoId}/{linkId}` |
+| `access-links:list-grants` | template | `GET /access-links/{repoId}/{linkId}/grants` |
+| `access-links:delete-grant` | template | `DELETE /access-links/{repoId}/{linkId}/grants/{grantId}` |
+
 ##### Users
 
 | `rel` | Kind | Method & target |
@@ -267,6 +286,8 @@ variant URLs are discovered today rather than built from a root template.
 | `auth:login` | href | `POST /auth` |
 | `auth:logout` | href | `POST /auth/action;logout` |
 | `auth:session` | href | `GET /auth/session` |
+| `auth:redeem-access-link` | href | `POST /auth/action;redeem-access-link` |
+| `auth:transfer-anonymous-access` | href | `POST /auth/action;transfer-anonymous-access` |
 
 > The `media:upload-by-id`, `media:download-by-id`, and `media:metadata-by-id` templates expose the `mediaItemId` field as a bare placeholder (`/media/{repoId}/{mediaItemId}…`); substitute it with the `mid;<uuid>` matrix segment shown above.
 
@@ -297,14 +318,40 @@ Issues a one-time login token for the given email. Always returns 204 to avoid u
 
 ### POST /auth
 
-Validates a one-time token and starts a session (sets a session cookie).
+Starts a session (sets a session cookie) for the credentials in the `Authorization` header. Scheme names are
+case-insensitive. A session the request already carries is left as it is: it stays valid until it expires or is
+logged out.
 
-**Authorization header**: `X-Token <email>:<token>`
+| `Authorization` | Result |
+| --- | --- |
+| `X-Token <email>:<token>` | Logs in the user with an emailed one-time token: `204` |
+| `X-Anonymous` | Creates an anonymous principal, its recovery token, and a session for it: `200`, body below |
+| `X-Anonymous <token>` | Logs in the anonymous principal holding the recovery token: `204` |
+
+An **anonymous principal** is an individual identity without an account. It can hold permissions, and it outlives
+its sessions: logging out ends only the session. Its **recovery token** starts another session for it, on any device;
+whoever holds the token can act as the principal. The token is returned only when the principal is created, and the
+server keeps only its SHA-256, so a client that loses it can't recover the identity. An anonymous principal unused
+for 90 days (`anonymous_principals.inactivity_days`) is deleted with its permissions, and its token stops working;
+logging in with the token, and using a session, count as use.
+
+A bare `X-Anonymous` always creates a new principal, even when the request carries an anonymous session: check
+`GET /auth/session` first. A lost response can't be retried; a retry creates another principal.
+
+#### Response body (`X-Anonymous`)
+
+```json
+{ "principal": "<principal-uuid>", "token": "<43 base64url characters>" }
+```
 
 #### Responses
 
+- `200 OK` — anonymous principal created, session started
 - `204 No Content` — session started
-- `401 Unauthorized` — invalid token, unknown user, or unverified user
+- `400 Bad Request` (`urn:bootstrap:error:bad-request`) — an unsupported scheme, or malformed credentials (an
+  `X-Token` that isn't `<email>:<uuid>`, a token that isn't 43 base64url characters)
+- `401 Unauthorized` — no `Authorization` header; an invalid token, unknown user, or unverified user; or a recovery
+  token that no principal holds (deleted, or unused for the inactivity period). `WWW-Authenticate` lists both schemes.
 
 ---
 
@@ -319,6 +366,68 @@ Terminates the current session and clears the session cookie.
 
 ---
 
+### POST /auth/action;redeem-access-link
+
+Redeems the code of an [access link](#access-links) into the session's principal, a user or an anonymous principal:
+it gets the link's permissions, and follows the link's repository. A visitor without a session logs in as an anonymous
+principal first ([POST /auth](#post-auth) with `X-Anonymous`). Redeeming again is a no-op (`newGrant: false`).
+
+#### Request body
+
+```json
+{ "code": "<43 characters>" }
+```
+
+#### Response body
+
+```json
+{
+  "data": {
+    "repository": "<repo-uuid>",
+    "newGrant": true,
+    "folders": [
+      { "id": "<folder-uuid>", "links": { "published": { "rel": "published", "href": "/published/{repoId}/narty-2025-k3x9p2q" } } },
+      { "id": "<folder-uuid>", "links": {} }
+    ]
+  },
+  "links": { "published:discover": { "rel": "published:discover", "href": "/published/{repoId}" } }
+}
+```
+
+`folders` lists the folders of the link; `published` leads to a folder's default revision, absent when it has none
+("Nothing published yet"). The link gives `view`, so the folders themselves can't be read live.
+
+#### Responses
+
+- `200 OK` (`Cache-Control: no-store`)
+- `401 Unauthorized` — no session
+- `404 Not Found` (`urn:bootstrap:error:access-link-unavailable`) — the code is unknown or malformed, or the link has
+  expired, been deactivated or deleted, or has no folders left. The answer is the same in every case.
+
+---
+
+### POST /auth/action;transfer-anonymous-access
+
+Moves the access of an anonymous principal to the session's user: the session cookie identifies the user, and
+`Authorization: X-Anonymous <recovery token>` proves the anonymous identity, checked as for a recovery login. The
+anonymous principal's access link grants and follows go to the user, and the anonymous principal is deleted with its
+sessions, so its token stops working. A grant of a link the user has redeemed already is dropped. Because the token is
+the only proof needed, this works from another device too.
+
+Like redeeming the codes on the account would, the transfer changes no `repositoryVersion` and records no changelog
+entry.
+
+#### Responses
+
+- `204 No Content` (`Cache-Control: no-store`)
+- `400 Bad Request` (`urn:bootstrap:error:bad-request`) — no `Authorization: X-Anonymous <token>`, or a malformed
+  token
+- `401 Unauthorized` — no session; or a recovery token that no principal holds, or whose principal has been unused for
+  the inactivity period
+- `403 Forbidden` (`urn:bootstrap:error:registered-user-required`) — the session is not a registered user's
+
+---
+
 ### GET /auth/session
 
 Returns details about the current session.
@@ -328,6 +437,7 @@ Returns details about the current session.
 ```json
 {
   "principal": "<uuid>",
+  "principalType": "user",
   "email": "user@example.com",
   "firstName": "Jan",
   "lastName": "Kowalski",
@@ -335,6 +445,9 @@ Returns details about the current session.
   "expiresAt":  "2026-01-08T00:00:00Z"
 }
 ```
+
+`principalType` is `user` or `anonymous`. A session of an anonymous principal has no `email`, `firstName`, or
+`lastName`.
 
 #### Responses
 
@@ -492,6 +605,7 @@ be a member (or owner) of that organization. Without it, the repository belongs 
 
 - `200 OK` — `{ "meta": { "revision": "…" }, "data": { "id": "…", "name": "…", "title": "…" }, "links": { "self": "…" } }`
 - `400 Bad Request` — missing `Content-Language`
+- `401 Unauthorized` — no session
 - `403 Forbidden` — the caller is not a member of the organization
 - `404 Not Found` (`urn:bootstrap:error:organization-not-found`) — no such organization
 - `409 Conflict` — name already taken (within the organization)
@@ -500,27 +614,53 @@ be a member (or owner) of that organization. Without it, the repository belongs 
 
 ### POST /repos;query
 
-Returns a paginated list of repositories the caller has a role on.
+Returns a paginated list of the repositories the caller relates to: by default those it holds a role on.
 
 #### Request body
 
 ```json
-{ "query": { "offset": 0, "limit": 20 } }
+{ "query": { "relationships": ["owner", "editor", "follower"], "offset": 0, "limit": 20 } }
 ```
 
-Both fields are optional. An optional top-level `fields` array selects the record fields, as `fields` does for
-`GET /repos/{repoId}`. By default, each record carries `organizationName` (absent if the repository has no
-organization), `name`, and `title`; `owners` and `editors` are never included.
+All fields are optional. `relationships` selects the repositories the caller is an `owner` or `editor` of, or
+follows (`follower`); a repository matching any of them is listed, once. Omitted, it is `["owner", "editor"]`. A
+followed repository is listed only while the caller may [read](#get-reposrepoid) it; the follow is kept, and the
+repository is listed again once access returns. Repositories the caller may read but doesn't follow are not listed:
+this is not a directory. An empty list or an unknown value is `400`.
+
+An optional top-level `fields` array selects the record fields, as `fields` does for `GET /repos/{repoId}`. By default,
+each record carries `organizationName` (absent if the repository has no organization), `name`, and `title`; `owners`
+and `editors` are never included. Records are ordered by repository ID; `offset` and `limit` page after the filter.
+
+Each record's `meta.relationship` tells how the caller relates to the repository, whatever matched:
+
+```json
+{ "meta": { "revision": "…", "relationship": { "roles": ["owner"], "following": true } }, "data": …, "links": … }
+```
+
+`roles` lists the caller's repository roles (`owner`, `editor`; at most one today). `meta.revision` is present only
+with a role. `links` has `repos:follow` or `repos:unfollow`.
 
 #### Responses
 
 - `200 OK` — `{ "meta": { "offset": …, "limit": … }, "records": [ { "meta": …, "data": …, "links": … }, … ] }`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — an empty or unknown `relationships` value
+- `401 Unauthorized` — no session (an anonymous session may query, and has only follows)
 
 ---
 
 ### GET /repos/{repoId}
 
-Retrieves a repository.
+Retrieves a repository, as far as the caller may see it:
+
+- an owner or editor reads all of it;
+- a caller with a `view` or `read` permission on some folder of the repository (their own, or the `public`
+  principal's, which applies to everyone) reads its summary: `id`, `organizationName`, `name`, and `title`, with no
+  `meta.revision`. `owners` and `editors` are left out even when `fields` asks for them;
+- anyone else gets `404`, as for a repository that doesn't exist.
+
+For a caller with a session, `meta.relationship` (as in [`POST /repos;query`](#post-reposquery)) tells how the caller
+relates to the repository, and `links` has `repos:follow` or `repos:unfollow`.
 
 #### Query parameters
 
@@ -536,7 +676,7 @@ The `representation` parameter selects how the repository is rendered:
 #### Responses
 
 - `200 OK` — repository resource
-- `404 Not Found`
+- `404 Not Found` — no such repository, or one the caller may not see
 
 ---
 
@@ -546,6 +686,32 @@ Retrieves a repository by its name (`name`). The repository name can optionally 
 name (`org`); organization names are case-insensitive.
 
 This request accepts the same additional query parameters as `GET /repos/{repoId}` and returns the same responses.
+
+---
+
+### PUT /repos/{repoId}/following
+
+Follows the repository: adds it to the caller's list (`relationships: ["follower"]` in
+[`POST /repos;query`](#post-reposquery)). Following grants nothing. The caller needs a session (a user or an anonymous
+principal) and must be able to [read](#get-reposrepoid) the repository. Idempotent. Redeeming an
+[access link](#access-links) follows its repository too, when it creates a grant.
+
+#### Responses
+
+- `204 No Content`
+- `401 Unauthorized` — no session
+- `404 Not Found` (`urn:bootstrap:error:repository-not-found`) — no such repository, or one the caller may not read
+
+---
+
+### DELETE /repos/{repoId}/following
+
+Stops following the repository. Works without access to the repository, and for one that doesn't exist. Idempotent.
+
+#### Responses
+
+- `204 No Content`
+- `401 Unauthorized` — no session
 
 ---
 
@@ -579,8 +745,9 @@ All fields under `data` are optional:
   (or owner) of it. A repository cannot be taken out of an organization.
 - `owners` / `editors` — each, when present, **wholesale-replaces** the current set of principals holding that role:
   principals missing from the list are removed, listed principals not currently holding the role are added.
-  Principal shape is the same `{ "type": "user"/"anonymous"/"link", ... }` form used by
-  `PATCH .../permissions`. Omitting the field leaves that role's assignments untouched. `"owners": []` is rejected
+  Principal shape is the same `{ "type": "user", "email": … }` form used by
+  `PATCH .../permissions`; only users hold repository roles, so `{ "type": "public" }` is rejected
+  (`422`, `urn:bootstrap:error:validation-failed`, title `Invalid Role Holder`). Omitting the field leaves that role's assignments untouched. `"owners": []` is rejected
   outright (`422`, `urn:bootstrap:error:repository-would-have-no-owners`) — a repository must always retain at
   least one owner; the request is refused before anything is written, so `editors`/`name`/`title` changes in the
   same request are not applied either. `"editors": []` has no such restriction and simply clears all editors.
@@ -592,7 +759,7 @@ All fields under `data` are optional:
 - `403 Forbidden` — the caller is not a member of the `organizationName` organization
 - `404 Not Found` (`urn:bootstrap:error:organization-not-found`) — no such organization
 - `409 Conflict` — revision mismatch, or the name is already taken (within the target organization)
-- `422 Unprocessable Entity` — `owners` supplied as an empty list
+- `422 Unprocessable Entity` — `owners` supplied as an empty list, or a principal that can't hold a role
 
 ---
 
@@ -647,7 +814,11 @@ repository owner or editor.
 `editor_added`/`editor_removed`, one of the `folder_*` events, or a [publishing](#publishing) event:
 `publication_created` `{ "folderId", "revision", "setAsDefault" }`, `publication_deleted` `{ "folderId", "revision" }`,
 `publication_default_changed` `{ "folderId", "revision" }` (`null` when cleared), `folder_public_key_regenerated`
-`{ "folderId", "publicKey" }`); `description.data` carries that event's own fields.
+`{ "folderId", "publicKey" }`, or an [access link](#access-links) event: `access_link_created`
+`{ "linkId", "folderIds" }`, `access_link_deactivated` `{ "linkId" }`, `access_link_deleted` `{ "linkId" }`,
+`access_link_grant_deleted` `{ "linkId", "grantId" }`); `description.data` carries that event's own fields. Publishing
+and access link events don't advance the `repositoryVersion` of metadata snapshots and sync. Redemptions are not
+recorded.
 
 `repository_renamed` records a change of the repository's qualified name: its `name`, its organization, or both, as
 one entry. Its data is `{ "oldOrganization", "oldName", "newOrganization", "newName" }`, where an organization field
@@ -992,7 +1163,9 @@ Notes on folder records:
   `type` and `title` and send the rest as `data`; otherwise they are stored as ordinary content fields.
 - `permissions` lists **effective** grants, including those inherited from ancestors, in the same shape as
   `GET .../permissions`: no `effect` field; `folder` names the folder the grant is stored on. A folder's own explicit
-  grants are exactly the records whose `data.folder` equals the record's `id`.
+  grants are exactly the records whose `data.folder` equals the record's `id`. As there, anonymous principals' grants
+  and grants given by access links are left out, so they never affect `repositoryVersion`, and sync plans can't name
+  or remove them.
 
 #### Responses
 
@@ -1730,7 +1903,11 @@ folder itself wins over an ancestor).
   inherited one. The folder's direct grants are exactly the records whose `folder` equals the folder's own ID.
 - Records carry no `effect` field; every record is a grant. (`effect` exists only in `PATCH` requests.)
 - Repository roles (owner/editor) are not listed here.
-- A link principal is returned as `{ "type": "link", "id": "<principal-uuid>" }` and carries no secret.
+- Grants to anonymous principals (individuals logged in without an account, see [POST /auth](#post-auth)) are not
+  listed: the owner can't tell who such a principal is, so this API neither shows nor changes their grants. They still
+  apply to the principal.
+- Permissions given by [access links](#access-links) are not listed either, and `PATCH` doesn't change them: a `grant`
+  adds a grant of its own beside them, and `default` removes only that one. They are managed through the link.
 
 #### Responses
 
@@ -1748,8 +1925,10 @@ A **principal** is one of:
 | Form | Meaning |
 | --- | --- |
 | `{ "type": "user", "email": "user@example.com" }` | A registered user, by email |
-| `{ "type": "anonymous" }` | Every caller, logged in or not: a grant to it also applies to every user and link |
-| `{ "type": "link", "id": "<principal-uuid>" }` | A shared-link principal |
+| `{ "type": "public" }` | Every caller, logged in or not: a grant to it also applies to every user |
+| `{ "type": "anonymous", "id": "<principal-uuid>" }` | An anonymous principal: an individual without an account. Not accepted here (`422`, title `Invalid Permission Holder`), nor in repository roles |
+
+An `anonymous` form whose `id` isn't an anonymous principal is `404` (`urn:bootstrap:error:principal-not-found`).
 
 Valid `permission` values: `view`, `read`, `write`, `publish`, `share`.
 Valid `effect` values: `grant` (add the permission on this folder; a no-op if it is already granted here) or
@@ -1774,7 +1953,11 @@ Valid `effect` values: `grant` (add the permission on this folder; a no-op if it
 #### Responses
 
 - `204 No Content`
-- `404 Not Found`
+- `400 Bad Request` — an invalid principal, e.g. `{ "type": "anonymous" }` without an `id`, or an unknown `type`
+- `404 Not Found` — the folder, a user (`urn:bootstrap:error:user-not-found`), or an anonymous principal
+  (`urn:bootstrap:error:principal-not-found`)
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, title `Invalid Permission Holder`) — an
+  anonymous principal
 
 ---
 
@@ -2206,7 +2389,7 @@ under `sub/`.
 
 **Who sees what** is decided by the permissions of the live root folder, so they can change without republishing:
 `view` shows its default revision, and `read` (or a repository role) every revision. Grants on ancestors count, and
-so do grants to `anonymous`. A publication the caller may not see is answered like one that doesn't exist, with
+so do grants to `public`. A publication the caller may not see is answered like one that doesn't exist, with
 `404` (`urn:bootstrap:error:publication-not-found`), as is an unknown key, a folder without a default revision, or a
 subfolder the revision doesn't include as a page.
 
@@ -2391,6 +2574,227 @@ and an item that has since become `restricted` is left out.
   publication or page
 - `404 Not Found` (`urn:bootstrap:error:publication-not-found`), or (`urn:bootstrap:error:media-item-not-in-list`)
   the `relativeTo` entry isn't in the list
+
+---
+
+## Access links
+
+An access link is a code that gives `view` on one or more folders of a repository to whoever redeems it
+([POST /auth/action;redeem-access-link](#post-authactionredeem-access-link)), a registered user or an anonymous
+principal. Redeeming copies the link's permissions to the redeemer, who keeps them until the link or their grant is
+deleted. `view` shows a folder's published default revision (and those of its subfolders), not the live folder.
+
+The code is a bearer secret, shown once, when the link is created; the server keeps only its SHA-256. A lost code
+needs a new link. The permissions of a link are fixed when it is created; deleting a folder removes it from the link.
+
+| Operation | Further redemptions | Access already given |
+| --- | --- | --- |
+| Expiry or deactivation | Refused | Kept |
+| Deleting the link | Refused | Withdrawn from everyone |
+| Deleting one recipient's grant | Still possible while the link is active | Withdrawn from that recipient |
+
+**Who may do what.** A registered user creates a link if they are an owner or editor of the repository, or have the
+`share` permission on every folder of the link. Owners and editors manage every link of the repository and see its
+recipients; a creator without a repository role manages the links they created, but doesn't see their recipients.
+Another caller gets `404` for a link. Anonymous principals can't create links (`403 registered-user-required`).
+
+Link operations change no folder revision and no `repositoryVersion`; they are recorded in the
+[changelog](#get-reposrepoidchangelog). Granting `view` on a folder also grants it on the folder's subfolders, including
+those created later.
+
+### POST /access-links/{repoId}
+
+#### Request body
+
+```json
+{
+  "data": {
+    "label": "Summer albums",
+    "expiresAt": "2027-01-01T00:00:00Z",
+    "permissions": [
+      { "folder": { "id": "<album-a-uuid>" }, "permission": "view" },
+      { "folder": { "path": "/albums/summer" }, "permission": "view" }
+    ]
+  }
+}
+```
+
+`label` (at most 250 characters) and `expiresAt` (in the future) are optional. `permissions` lists 1 to 100 entries
+(`access_links.max_permissions`), each `view`; a folder is given by ID or path, and a path is resolved now, so a later
+rename or move doesn't affect the link.
+
+#### Response body
+
+The link, with its code in `data.code`:
+
+```json
+{
+  "meta": {},
+  "data": {
+    "id": "<link-uuid>",
+    "label": "Summer albums",
+    "createdBy": { "type": "user", "email": "owner@example.com" },
+    "createdAt": "2026-10-22T10:00:00Z",
+    "expiresAt": "2027-01-01T00:00:00Z",
+    "status": "active",
+    "permissions": [ { "folder": "<album-a-uuid>", "permission": "view" } ],
+    "grantCount": 0,
+    "code": "<43 characters>"
+  },
+  "links": {
+    "self": { "rel": "self", "href": "/access-links/{repoId}/{linkId}" },
+    "grants": { "rel": "grants", "href": "/access-links/{repoId}/{linkId}/grants" }
+  }
+}
+```
+
+`status` is `active`, `expired`, or `deactivated` (then with `deactivatedAt`). `createdBy` is absent once the creator's
+account is gone. `permissions` is in folder path order, and empty once every folder of the link has been deleted.
+
+#### Responses
+
+- `200 OK` (`Cache-Control: no-store`)
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a permission other than `view` (whoever asks), no
+  permissions or too many, an `expiresAt` not in the future, or a blank or too-long `label`
+- `401 Unauthorized` — no session
+- `403 Forbidden` — a caller without a repository role lacks `share` on a folder (nothing is created), or
+  (`registered-user-required`) an anonymous session
+- `404 Not Found` — the repository, or a folder
+
+### GET /access-links/{repoId}
+
+The links the caller manages, newest first, without codes: every link of the repository for an owner or editor, the
+links they created for anyone else.
+
+#### Response body
+
+```json
+{
+  "meta": {},
+  "records": [
+    {
+      "meta": {},
+      "data": {
+        "id": "<link-uuid>",
+        "label": "Summer albums",
+        "createdBy": { "type": "user", "email": "owner@example.com" },
+        "createdAt": "2026-10-22T10:00:00Z",
+        "expiresAt": "2027-01-01T00:00:00Z",
+        "status": "active",
+        "permissions": [
+          { "folder": "<album-a-uuid>", "permission": "view" },
+          { "folder": "<album-b-uuid>", "permission": "view" }
+        ],
+        "grantCount": 3
+      },
+      "links": {
+        "self": { "rel": "self", "href": "/access-links/{repoId}/{linkId}" },
+        "grants": { "rel": "grants", "href": "/access-links/{repoId}/{linkId}/grants" }
+      }
+    },
+    {
+      "meta": {},
+      "data": {
+        "id": "<other-link-uuid>",
+        "createdBy": { "type": "user", "email": "editor@example.com" },
+        "createdAt": "2026-09-01T08:00:00Z",
+        "deactivatedAt": "2026-10-01T12:00:00Z",
+        "status": "deactivated",
+        "permissions": [ { "folder": "<album-c-uuid>", "permission": "view" } ],
+        "grantCount": 1
+      },
+      "links": {
+        "self": { "rel": "self", "href": "/access-links/{repoId}/{otherLinkId}" },
+        "grants": { "rel": "grants", "href": "/access-links/{repoId}/{otherLinkId}/grants" }
+      }
+    }
+  ]
+}
+```
+
+Fields without a value (`label`, `expiresAt`, `deactivatedAt`, and `createdBy` once the creator's account is gone)
+are left out.
+
+#### Responses
+
+- `200 OK`
+- `401 Unauthorized` — no session
+- `403 Forbidden` (`urn:bootstrap:error:registered-user-required`) — an anonymous session
+- `404 Not Found` (`urn:bootstrap:error:repository-not-found`) — no such repository
+
+### GET /access-links/{repoId}/{linkId}
+
+The link, without its code.
+
+#### Response body
+
+```json
+{
+  "meta": {},
+  "data": {
+    "id": "<link-uuid>",
+    "label": "Summer albums",
+    "createdBy": { "type": "user", "email": "owner@example.com" },
+    "createdAt": "2026-10-22T10:00:00Z",
+    "expiresAt": "2027-01-01T00:00:00Z",
+    "status": "active",
+    "permissions": [
+      { "folder": "<album-a-uuid>", "permission": "view" },
+      { "folder": "<album-b-uuid>", "permission": "view" }
+    ],
+    "grantCount": 3
+  },
+  "links": {
+    "self": { "rel": "self", "href": "/access-links/{repoId}/{linkId}" },
+    "grants": { "rel": "grants", "href": "/access-links/{repoId}/{linkId}/grants" }
+  }
+}
+```
+
+#### Responses
+
+- `200 OK`
+- `401 Unauthorized` — no session
+- `403 Forbidden` (`urn:bootstrap:error:registered-user-required`) — an anonymous session
+- `404 Not Found` — no such repository (`urn:bootstrap:error:repository-not-found`), or
+  (`urn:bootstrap:error:access-link-not-found`) no such link, or one the caller doesn't manage
+
+### POST /access-links/{repoId}/{linkId}/action;deactivate
+
+Stops redemption of the link; access already given stays. Idempotent; there is no reactivation. Returns the link.
+
+### DELETE /access-links/{repoId}/{linkId}
+
+Deletes the link and withdraws the access it has given. `204`.
+
+### GET /access-links/{repoId}/{linkId}/grants
+
+The link's recipients, oldest first. Owners and editors only (`403` otherwise).
+
+```json
+{
+  "meta": {},
+  "records": [
+    {
+      "data": {
+        "id": "<grant-uuid>",
+        "principal": { "type": "anonymous", "id": "<principal-uuid>", "lastActiveAt": "2026-10-22T10:00:00Z" },
+        "redeemedAt": "2026-10-20T10:00:00Z",
+        "permissions": [ { "folder": "<folder-uuid>", "permission": "view" } ]
+      },
+      "links": { "self": { "rel": "self", "href": "/access-links/{repoId}/{linkId}/grants/{grantId}" } }
+    }
+  ]
+}
+```
+
+A registered user is `{ "type": "user", "email", "firstName", "lastName" }`. `lastActiveAt` is the anonymous
+principal's last recorded activity. `permissions` are those the grant still gives.
+
+### DELETE /access-links/{repoId}/{linkId}/grants/{grantId}
+
+Withdraws what the link gave this recipient; access they have otherwise stays, and they may redeem the link again
+while it is active. Idempotent: `204`. Owners and editors only.
 
 ---
 

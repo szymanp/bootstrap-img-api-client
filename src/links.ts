@@ -22,7 +22,7 @@ export class ServiceLinks {
 
   // --- auth ---
 
-  /** `auth:login` — exchange a token for a session. */
+  /** `auth:login` — start a session (one-time token, or anonymous principal). */
   login(): HrefLink {
     return this.href('auth:login');
   }
@@ -40,6 +40,16 @@ export class ServiceLinks {
   /** `auth:send-token` — request a login token. */
   sendToken(): HrefLink {
     return this.href('auth:send-token');
+  }
+
+  /** `auth:redeem-access-link` — redeem an access link's code into the session's principal. */
+  redeemAccessLink(): HrefLink {
+    return this.href('auth:redeem-access-link');
+  }
+
+  /** `auth:transfer-anonymous-access` — move an anonymous principal's access to the session's user. */
+  transferAnonymousAccess(): HrefLink {
+    return this.href('auth:transfer-anonymous-access');
   }
 
   // --- users ---
@@ -121,6 +131,16 @@ export class ServiceLinks {
     return this.resolve('repos:tags', { repoId: encode(repoId) });
   }
 
+  /** `repos:follow` — follow a repository. */
+  followRepo(repoId: string): HrefLink {
+    return this.resolve('repos:follow', { repoId: encode(repoId) });
+  }
+
+  /** `repos:unfollow` — stop following a repository. */
+  unfollowRepo(repoId: string): HrefLink {
+    return this.resolve('repos:unfollow', { repoId: encode(repoId) });
+  }
+
   /** `repos:metadata-snapshot-create` — start building a metadata snapshot. */
   createMetadataSnapshot(repoId: string): HrefLink {
     return this.resolve('repos:metadata-snapshot-create', { repoId: encode(repoId) });
@@ -134,6 +154,47 @@ export class ServiceLinks {
   /** `repos:metadata-sync` — atomically apply a metadata-sync plan. */
   metadataSync(repoId: string): HrefLink {
     return this.resolve('repos:metadata-sync', { repoId: encode(repoId) });
+  }
+
+  // --- access links ---
+
+  /** `access-links:create` — create an access link. */
+  createAccessLink(repoId: string): HrefLink {
+    return this.resolve('access-links:create', { repoId: encode(repoId) });
+  }
+
+  /** `access-links:list` — list the access links the caller manages. */
+  listAccessLinks(repoId: string): HrefLink {
+    return this.resolve('access-links:list', { repoId: encode(repoId) });
+  }
+
+  /** `access-links:read` — retrieve an access link. */
+  readAccessLink(repoId: string, linkId: string): HrefLink {
+    return this.resolve('access-links:read', { repoId: encode(repoId), linkId: encode(linkId) });
+  }
+
+  /** `access-links:deactivate` — stop redemption of an access link. */
+  deactivateAccessLink(repoId: string, linkId: string): HrefLink {
+    return this.resolve('access-links:deactivate', { repoId: encode(repoId), linkId: encode(linkId) });
+  }
+
+  /** `access-links:delete` — delete an access link, withdrawing what it gave. */
+  deleteAccessLink(repoId: string, linkId: string): HrefLink {
+    return this.resolve('access-links:delete', { repoId: encode(repoId), linkId: encode(linkId) });
+  }
+
+  /** `access-links:list-grants` — list an access link's recipients. */
+  listAccessLinkGrants(repoId: string, linkId: string): HrefLink {
+    return this.resolve('access-links:list-grants', { repoId: encode(repoId), linkId: encode(linkId) });
+  }
+
+  /** `access-links:delete-grant` — withdraw what an access link gave one recipient. */
+  deleteAccessLinkGrant(repoId: string, linkId: string, grantId: string): HrefLink {
+    return this.resolve('access-links:delete-grant', {
+      repoId: encode(repoId),
+      linkId: encode(linkId),
+      grantId: encode(grantId),
+    });
   }
 
   // --- organizations ---

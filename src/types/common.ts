@@ -18,10 +18,18 @@ export type Localized = string | Record<LanguageTag, string>;
 
 /**
  * A security principal referenced in permissions and repository roles.
- * `anonymous` means every caller, logged in or not: a grant to it also
- * applies to every user and link.
+ * - `user` — a registered user, by email.
+ * - `public` — every caller, logged in or not: a grant to it also applies to
+ *   every user. Not accepted in repository roles.
+ * - `anonymous` — an anonymous principal (an individual without an account).
+ *   Not accepted in `PATCH .../permissions` nor in repository roles (`422`);
+ *   an `id` that isn't an anonymous principal is `404`
+ *   (`ErrorType.PrincipalNotFound`).
  */
-export type Principal = { type: 'user'; email: string } | { type: 'anonymous' } | { type: 'link'; id: string };
+export type Principal =
+  | { type: 'user'; email: string }
+  | { type: 'public' }
+  | { type: 'anonymous'; id: string };
 
 /** Permissions that can be granted on a folder. */
 export type Permission = 'view' | 'read' | 'write' | 'publish' | 'share';

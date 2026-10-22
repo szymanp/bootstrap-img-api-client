@@ -623,7 +623,7 @@ describe('repositories', () => {
         type: 'album' as const,
         data: {},
         texts: { 'en-us': 'Photos from 2026' },
-        permissions: [{ principal: { type: 'anonymous' as const }, permission: 'view' as const, effect: 'grant' as const }],
+        permissions: [{ principal: { type: 'public' as const }, permission: 'view' as const, effect: 'grant' as const }],
         media: [{ op: 'add' as const, id: 'media-uuid', filename: 'first.jpg' }],
       },
       { op: 'folder.update' as const, folder: 'folder-uuid', expectedRevision: 'r1', changes: { name: 'x' } },
@@ -1526,3 +1526,221 @@ describe('media', () => {
 function FolderById() {
   return { id: 'f1' } as const;
 }
+
+describe('anonymous principals', () => {
+  it('creates an anonymous principal with a bare X-Anonymous', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { principal: 'p1', token: 'recovery-token' },
+      headers: { 'set-cookie': 'session=anon; Path=/' },
+    });
+    const credentials = new MemoryCookieStore();
+    const client = makeClient(mock, credentials);
+
+    const result = await client.auth.loginAnonymous();
+    expect(result).toEqual({ principal: 'p1', token: 'recovery-token' });
+    expect(mock.last.url).toBe('http://localhost:8080/auth');
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.headers.get('authorization')).toBe('X-Anonymous');
+
+    const headers = new Headers();
+    credentials.decorate(headers);
+    expect(headers.get('cookie')).toBe('session=anon');
+  });
+
+  it('logs in with a recovery token', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    await client.auth.loginWithRecoveryToken('recovery-token');
+    expect(mock.last.url).toBe('http://localhost:8080/auth');
+    expect(mock.last.headers.get('authorization')).toBe('X-Anonymous recovery-token');
+  });
+
+  it('reads an anonymous session', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { principal: 'p1', principalType: 'anonymous', createdAt: '', expiresAt: '' },
+    });
+    const client = makeClient(mock);
+
+    const session = await client.auth.session();
+    expect(session.principalType).toBe('anonymous');
+    expect(session.email).toBeUndefined();
+  });
+
+  it('redeems an access link code', async () => {
+    const body = {
+      data: {
+        repository: 'repo1',
+        newGrant: true,
+        folders: [
+          { id: 'f1', links: { published: { rel: 'published', href: '/published/repo1/key' } } },
+          { id: 'f2', links: {} },
+        ],
+      },
+      links: { 'published:discover': { rel: 'published:discover', href: '/published/repo1' } },
+    };
+    const mock = new MockFetch().enqueue({ status: 200, json: body });
+    const client = makeClient(mock);
+
+    const result = await client.auth.redeemAccessLink('the-code');
+    expect(result).toEqual(body);
+    expect(mock.last.url).toBe('http://localhost:8080/auth/action;redeem-access-link');
+    expect(mock.last.method).toBe('POST');
+    expect(JSON.parse(mock.last.body!)).toEqual({ code: 'the-code' });
+  });
+
+  it('maps an unusable access link to AccessLinkUnavailable', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 404,
+      headers: { 'content-type': 'application/problem+json' },
+      body: JSON.stringify({ type: ErrorType.AccessLinkUnavailable, status: 404 }),
+    });
+    const client = makeClient(mock);
+
+    const err = await client.auth.redeemAccessLink('bad').catch((e) => e);
+    expect(isApiError(err, ErrorType.AccessLinkUnavailable)).toBe(true);
+  });
+
+  it('transfers anonymous access with the recovery token', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    await client.auth.transferAnonymousAccess('recovery-token');
+    expect(mock.last.url).toBe('http://localhost:8080/auth/action;transfer-anonymous-access');
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.headers.get('authorization')).toBe('X-Anonymous recovery-token');
+  });
+});
+
+describe('repository following', () => {
+  it('queries by relationship', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: { offset: 0, limit: 20 },
+        records: [
+          { meta: { relationship: { roles: [], following: true } }, data: { id: 'r1', name: 'a' }, links: {} },
+        ],
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.repos.query({ relationships: ['follower'], limit: 20 });
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { relationships: ['follower'], limit: 20 } });
+    expect(result.records[0]?.meta.relationship).toEqual({ roles: [], following: true });
+  });
+
+  it('follows and unfollows a repository', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 }, { status: 204 });
+    const client = makeClient(mock);
+
+    await client.repos.follow('r1');
+    expect(mock.requests[0]?.method).toBe('PUT');
+    expect(mock.requests[0]?.url).toBe('http://localhost:8080/repos/r1/following');
+
+    await client.repos.unfollow('r1');
+    expect(mock.last.method).toBe('DELETE');
+    expect(mock.last.url).toBe('http://localhost:8080/repos/r1/following');
+  });
+});
+
+describe('access links', () => {
+  const link = {
+    meta: {},
+    data: {
+      id: 'l1',
+      label: 'Summer',
+      createdAt: '2026-10-22T10:00:00Z',
+      status: 'active',
+      permissions: [{ folder: 'f1', permission: 'view' }],
+      grantCount: 0,
+      code: 'the-code',
+    },
+    links: {},
+  };
+
+  it('creates a link, sending folder refs in body form', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: link });
+    const client = makeClient(mock);
+
+    const result = await client.accessLinks('repo1').create({
+      label: 'Summer',
+      expiresAt: '2027-01-01T00:00:00Z',
+      permissions: [
+        { folder: { id: 'f1' }, permission: 'view' },
+        { folder: '/albums/summer', permission: 'view' },
+      ],
+    });
+    expect(result.data.code).toBe('the-code');
+    expect(mock.last.url).toBe('http://localhost:8080/access-links/repo1');
+    expect(mock.last.method).toBe('POST');
+    expect(JSON.parse(mock.last.body!)).toEqual({
+      data: {
+        label: 'Summer',
+        expiresAt: '2027-01-01T00:00:00Z',
+        permissions: [
+          { folder: { id: 'f1' }, permission: 'view' },
+          { folder: { path: '/albums/summer' }, permission: 'view' },
+        ],
+      },
+    });
+  });
+
+  it('lists, reads, deactivates, and deletes links', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: { meta: {}, records: [link] } },
+      { status: 200, json: link },
+      { status: 200, json: { ...link, data: { ...link.data, status: 'deactivated' } } },
+      { status: 204 },
+    );
+    const api = makeClient(mock).accessLinks('repo1');
+
+    expect((await api.list()).records).toHaveLength(1);
+    await api.get('l1');
+    const deactivated = await api.deactivate('l1');
+    await api.delete('l1');
+
+    expect(deactivated.data.status).toBe('deactivated');
+    expect(mock.requests.map((r) => `${r.method} ${new URL(r.url).pathname}`)).toEqual([
+      'GET /access-links/repo1',
+      'GET /access-links/repo1/l1',
+      'POST /access-links/repo1/l1/action;deactivate',
+      'DELETE /access-links/repo1/l1',
+    ]);
+  });
+
+  it('lists and deletes grants', async () => {
+    const mock = new MockFetch().enqueue(
+      {
+        status: 200,
+        json: {
+          meta: {},
+          records: [
+            {
+              data: {
+                id: 'g1',
+                principal: { type: 'anonymous', id: 'p1', lastActiveAt: '2026-10-22T10:00:00Z' },
+                redeemedAt: '2026-10-20T10:00:00Z',
+                permissions: [{ folder: 'f1', permission: 'view' }],
+              },
+              links: {},
+            },
+          ],
+        },
+      },
+      { status: 204 },
+    );
+    const api = makeClient(mock).accessLinks('repo1');
+
+    const grants = await api.listGrants('l1');
+    expect(grants.records[0]?.data.principal).toMatchObject({ type: 'anonymous', id: 'p1' });
+    await api.deleteGrant('l1', 'g1');
+
+    expect(mock.requests.map((r) => `${r.method} ${new URL(r.url).pathname}`)).toEqual([
+      'GET /access-links/repo1/l1/grants',
+      'DELETE /access-links/repo1/l1/grants/g1',
+    ]);
+  });
+});

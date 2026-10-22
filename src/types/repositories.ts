@@ -10,7 +10,8 @@ export interface Repository {
   /** Single string in `standard` representation; all-languages object in `original`. */
   title?: Localized;
   /**
-   * When present, wholesale-replaces the set of owners. Must not be empty —
+   * When present, wholesale-replaces the set of owners. Only users hold
+   * repository roles (any other principal is a `422`). Must not be empty —
    * `[]` is rejected with `422` (`ErrorType.RepositoryWouldHaveNoOwners`) and
    * nothing in the request is applied.
    */
@@ -23,6 +24,23 @@ export interface Repository {
    */
   organizationName?: string;
   [key: string]: unknown;
+}
+
+/** How the caller relates to a repository, as a `POST /repos;query` filter. */
+export type RepositoryRelationshipKind = 'owner' | 'editor' | 'follower';
+
+/** A repository role. */
+export type RepositoryRole = 'owner' | 'editor';
+
+/**
+ * `meta.relationship` of a repository resource read with a session: how the
+ * caller relates to the repository.
+ */
+export interface RepositoryRelationship {
+  /** The caller's repository roles (at most one today); empty without a role. */
+  roles: RepositoryRole[];
+  /** Whether the caller follows the repository. */
+  following: boolean;
 }
 
 /** Body for `POST /repos`. */

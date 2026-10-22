@@ -276,6 +276,40 @@ export const serviceRootFixture: ServiceRoot = {
       template: '/published/{repoId}/{publicationRootVar}/sub/{subFolderId}/media;query',
       fields: ['repoId', 'publicationRootVar', 'subFolderId'],
     },
+    'auth:redeem-access-link': { rel: 'auth:redeem-access-link', href: '/auth/action;redeem-access-link' },
+    'auth:transfer-anonymous-access': {
+      rel: 'auth:transfer-anonymous-access',
+      href: '/auth/action;transfer-anonymous-access',
+    },
+    'repos:follow': { rel: 'repos:follow', template: '/repos/{repoId}/following', fields: ['repoId'] },
+    'repos:unfollow': { rel: 'repos:unfollow', template: '/repos/{repoId}/following', fields: ['repoId'] },
+    'access-links:create': { rel: 'access-links:create', template: '/access-links/{repoId}', fields: ['repoId'] },
+    'access-links:list': { rel: 'access-links:list', template: '/access-links/{repoId}', fields: ['repoId'] },
+    'access-links:read': {
+      rel: 'access-links:read',
+      template: '/access-links/{repoId}/{linkId}',
+      fields: ['repoId', 'linkId'],
+    },
+    'access-links:deactivate': {
+      rel: 'access-links:deactivate',
+      template: '/access-links/{repoId}/{linkId}/action;deactivate',
+      fields: ['repoId', 'linkId'],
+    },
+    'access-links:delete': {
+      rel: 'access-links:delete',
+      template: '/access-links/{repoId}/{linkId}',
+      fields: ['repoId', 'linkId'],
+    },
+    'access-links:list-grants': {
+      rel: 'access-links:list-grants',
+      template: '/access-links/{repoId}/{linkId}/grants',
+      fields: ['repoId', 'linkId'],
+    },
+    'access-links:delete-grant': {
+      rel: 'access-links:delete-grant',
+      template: '/access-links/{repoId}/{linkId}/grants/{grantId}',
+      fields: ['repoId', 'linkId', 'grantId'],
+    },
     'folders:list': {
       rel: 'folders:list',
       template: '/folders/{repoId}/{folderIdOrPath}/action;list',

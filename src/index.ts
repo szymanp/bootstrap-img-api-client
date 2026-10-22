@@ -8,6 +8,8 @@ export type { IAuthApi } from './api/auth.api';
 export type { IUsersApi } from './api/users.api';
 export type {
   IRepositoriesApi,
+  RepositoryMeta,
+  RepositoryQuery,
   RepositoryResource,
   GetRepositoryByNameOptions,
   ChangelogCollection,
@@ -64,6 +66,12 @@ export type {
   PublishedText,
   PublishedTree,
 } from './api/published.api';
+export type {
+  IAccessLinksApi,
+  AccessLinkGrantsCollection,
+  AccessLinkResource,
+  AccessLinksCollection,
+} from './api/access-links.api';
 export type { IServiceRootApi, ServiceRoot } from './api/service-root.api';
 export { ServiceLinks } from './links';
 
@@ -126,7 +134,27 @@ export type {
   UuidString,
   WriteLanguageOptions,
 } from './types/common';
-export type { PrincipalId, Session, SendTokenResult } from './types/auth';
+export type {
+  AnonymousLoginResult,
+  PrincipalId,
+  PrincipalType,
+  RedeemAccessLinkResult,
+  RedeemedAccessLinkFolder,
+  Session,
+  SendTokenResult,
+} from './types/auth';
+export type {
+  AccessLink,
+  AccessLinkGrant,
+  AccessLinkGrantId,
+  AccessLinkId,
+  AccessLinkPermission,
+  AccessLinkPermissionInput,
+  AccessLinkPermissionKind,
+  AccessLinkRecipient,
+  AccessLinkStatus,
+  CreateAccessLinkInput,
+} from './types/access-links';
 export type {
   EmailLanguageOptions,
   RegisterUserInput,
@@ -134,7 +162,15 @@ export type {
   User,
   UserSettings,
 } from './types/users';
-export type { CreateRepositoryInput, Repository, RepositoryId, UpdateRepositoryInput } from './types/repositories';
+export type {
+  CreateRepositoryInput,
+  Repository,
+  RepositoryId,
+  RepositoryRelationship,
+  RepositoryRelationshipKind,
+  RepositoryRole,
+  UpdateRepositoryInput,
+} from './types/repositories';
 export type {
   CreateOrganizationInput,
   Organization,

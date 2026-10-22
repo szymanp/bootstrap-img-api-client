@@ -1,6 +1,6 @@
 import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
-import type { SendTokenResult, Session } from '../types/auth';
+import type { AnonymousLoginResult, RedeemAccessLinkResult, SendTokenResult, Session } from '../types/auth';
 import type { IAuthApi } from './auth.api';
 
 /** Authentication & session endpoints. */
@@ -38,6 +38,26 @@ export class AuthApi implements IAuthApi {
     });
   }
 
+  /** Create a new anonymous principal and start a session for it. */
+  async loginAnonymous(): Promise<AnonymousLoginResult> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).login().href,
+      headers: { authorization: 'X-Anonymous' },
+      parse: parseJson<AnonymousLoginResult>,
+    });
+  }
+
+  /** Start a session for an existing anonymous principal by its recovery token. */
+  async loginWithRecoveryToken(token: string): Promise<void> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).login().href,
+      headers: { authorization: `X-Anonymous ${token}` },
+      parse: parseVoid,
+    });
+  }
+
   /** Convenience: request a token (test users only) and log in with it. */
   async loginWithTestToken(email: string): Promise<void> {
     const { token } = await this.sendToken(email);
@@ -62,6 +82,26 @@ export class AuthApi implements IAuthApi {
       method: 'GET',
       path: (await this.links()).session().href,
       parse: parseJson<Session>,
+    });
+  }
+
+  /** Redeem an access link's code into the session's principal. */
+  async redeemAccessLink(code: string): Promise<RedeemAccessLinkResult> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).redeemAccessLink().href,
+      body: { kind: 'json', value: { code } },
+      parse: parseJson<RedeemAccessLinkResult>,
+    });
+  }
+
+  /** Move an anonymous principal's access to the session's user. */
+  async transferAnonymousAccess(token: string): Promise<void> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).transferAnonymousAccess().href,
+      headers: { authorization: `X-Anonymous ${token}` },
+      parse: parseVoid,
     });
   }
 }

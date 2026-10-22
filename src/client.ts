@@ -1,3 +1,5 @@
+import { AccessLinksApi } from './api/access-links';
+import type { IAccessLinksApi } from './api/access-links.api';
 import { AuthApi } from './api/auth';
 import type { IAuthApi } from './api/auth.api';
 import { FoldersApi } from './api/folders';
@@ -71,6 +73,11 @@ export class BootstrapClient {
   /** Media-item endpoints scoped to a repository. */
   media(repoId: string): IMediaApi {
     return new MediaApi(this.transport, repoId, this.links);
+  }
+
+  /** Access-link endpoints scoped to a repository. */
+  accessLinks(repoId: string): IAccessLinksApi {
+    return new AccessLinksApi(this.transport, repoId, this.links);
   }
 
   /** Published-content (Viewer) endpoints scoped to a repository. */

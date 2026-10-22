@@ -117,11 +117,20 @@ export interface IFoldersApi {
    * List the folder's effective permissions: its own grants plus those
    * inherited from ancestors. A record's `folder` names where the grant is
    * stored, so the direct grants are those whose `folder` is this folder's id.
-   * Repository roles (owner/editor) are not included.
+   * Repository roles (owner/editor) are not included, nor are grants to
+   * anonymous principals or permissions given by access links (they still
+   * apply; access-link permissions are managed through the link).
    */
   getPermissions(ref: FolderRefInput, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<PermissionsCollection>;
 
-  /** Add, remove, or modify folder permissions. */
+  /**
+   * Add, remove, or modify folder permissions. An `anonymous` principal is
+   * rejected with a 422 `ApiError` (`ErrorType.ValidationFailed`, title
+   * `Invalid Permission Holder`); an unknown user or anonymous principal is
+   * a 404 (`ErrorType.UserNotFound` / `ErrorType.PrincipalNotFound`).
+   * Permissions given by access links are left alone: `default` removes only
+   * the folder's own grant.
+   */
   patchPermissions(
     ref: FolderRefInput,
     records: PermissionRecord[],

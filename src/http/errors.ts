@@ -17,6 +17,12 @@ export const ErrorType = {
   ValidationFailed: 'urn:bootstrap:error:validation-failed',
   Unauthorized: 'urn:bootstrap:error:unauthorized',
   Forbidden: 'urn:bootstrap:error:forbidden',
+  /**
+   * `403`: the endpoint is for registered users only (profile/settings,
+   * organizations, creating repositories or access links, transferring
+   * anonymous access) and the session is an anonymous principal's.
+   */
+  RegisteredUserRequired: 'urn:bootstrap:error:registered-user-required',
   UserNotFound: 'urn:bootstrap:error:user-not-found',
   UserAlreadyExists: 'urn:bootstrap:error:user-already-exists',
   UserAlreadyVerified: 'urn:bootstrap:error:user-already-verified',
@@ -56,6 +62,15 @@ export const ErrorType = {
    * (answered like one that doesn't exist).
    */
   PublicationNotFound: 'urn:bootstrap:error:publication-not-found',
+  /** An `anonymous` principal whose `id` isn't an anonymous principal. */
+  PrincipalNotFound: 'urn:bootstrap:error:principal-not-found',
+  /** An access link the caller doesn't manage (or that doesn't exist). */
+  AccessLinkNotFound: 'urn:bootstrap:error:access-link-not-found',
+  /**
+   * Redeeming an access link failed: the code is unknown or malformed, or the
+   * link has expired, been deactivated or deleted, or has no folders left.
+   */
+  AccessLinkUnavailable: 'urn:bootstrap:error:access-link-unavailable',
   InternalError: 'urn:bootstrap:error:internal-error',
 } as const;
 

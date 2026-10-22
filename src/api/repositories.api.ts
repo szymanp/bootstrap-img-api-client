@@ -1,10 +1,17 @@
 import type { AuditLogEntry } from '../types/changelog';
 import type { ReadOptions, WriteLanguageOptions } from '../types/common';
-import type { Collection, PageQuery, Resource } from '../types/envelope';
+import type { Collection, Meta, PageQuery, Resource } from '../types/envelope';
 import type { FolderTag } from '../types/folders';
 import type { CreateMetadataSnapshotInput, MetadataSnapshotRecord } from '../types/metadata-snapshot';
 import type { MetadataSyncPlan } from '../types/metadata-sync';
-import type { CreateRepositoryInput, Repository, RepositoryId, UpdateRepositoryInput } from '../types/repositories';
+import type {
+  CreateRepositoryInput,
+  Repository,
+  RepositoryId,
+  RepositoryRelationship,
+  RepositoryRelationshipKind,
+  UpdateRepositoryInput,
+} from '../types/repositories';
 
 /** Repository endpoints. */
 export interface IRepositoriesApi {
@@ -19,21 +26,36 @@ export interface IRepositoriesApi {
   create(input: CreateRepositoryInput, options?: WriteLanguageOptions): Promise<RepositoryResource>;
 
   /**
-   * List repositories the caller has a role on (paginated). By default each
-   * record carries `organizationName` (absent if none), `name`, and `title`;
-   * `owners` and `editors` are never included.
+   * List the repositories the caller relates to (paginated, ordered by
+   * repository id). `query.relationships` selects those the caller is an
+   * `owner` or `editor` of, or follows (`follower`); a repository matching any
+   * is listed once. It defaults to `['owner', 'editor']`; an empty list or an
+   * unknown value is a 400 `ApiError`. A followed repository is listed only
+   * while the caller may read it. An anonymous session may query, and has
+   * only follows.
    *
-   * @param query Pagination offset/limit.
+   * By default each record carries `organizationName` (absent if none),
+   * `name`, and `title`; `owners` and `editors` are never included. Each
+   * record's `meta.relationship` tells how the caller relates to it;
+   * `meta.revision` is present only with a role, and `links` has
+   * `repos:follow` or `repos:unfollow`.
+   *
+   * @param query Relationship filter and pagination offset/limit.
    * @param options Field selector and `Accept-Language` override.
    * @returns A page of repositories.
    */
   query(
-    query?: PageQuery,
+    query?: RepositoryQuery,
     options?: Pick<ReadOptions, 'acceptLanguage' | 'fields'>,
   ): Promise<Collection<RepositoryResource>>;
 
   /**
-   * Retrieve a repository.
+   * Retrieve a repository, as far as the caller may see it: an owner or
+   * editor reads all of it; a caller with `view` or `read` on some folder of
+   * it (their own, or `public`'s) reads only its summary (`id`,
+   * `organizationName`, `name`, `title`, no `meta.revision`); anyone else gets
+   * a 404 `ApiError`, as for a repository that doesn't exist. With a session,
+   * `meta.relationship` tells how the caller relates to it.
    *
    * @param repoId The repository's id.
    * @param options Field selector, representation, and `Accept-Language` override.
@@ -79,6 +101,27 @@ export interface IRepositoriesApi {
    * @returns Resolves once the repository is deleted.
    */
   delete(repoId: RepositoryId, revision: string): Promise<void>;
+
+  /**
+   * Follow a repository: add it to the caller's list
+   * (`relationships: ['follower']` in {@link query}). Following grants
+   * nothing. Needs a session (a user or an anonymous principal) and read
+   * access to the repository, otherwise a 404 `ApiError`
+   * (`ErrorType.RepositoryNotFound`). Idempotent.
+   *
+   * @param repoId The repository's id.
+   * @returns Resolves once the repository is followed.
+   */
+  follow(repoId: RepositoryId): Promise<void>;
+
+  /**
+   * Stop following a repository. Works without access to the repository,
+   * and for one that doesn't exist. Idempotent.
+   *
+   * @param repoId The repository's id.
+   * @returns Resolves once the repository is no longer followed.
+   */
+  unfollow(repoId: RepositoryId): Promise<void>;
 
   /**
    * Retrieve a page of the repository's audit log, most recent first. The
@@ -182,7 +225,19 @@ export interface IRepositoriesApi {
   ): Promise<MetadataSyncResult>;
 }
 
-export type RepositoryResource = Resource<Repository>;
+/** `meta` of a repository resource. */
+export interface RepositoryMeta extends Meta {
+  /** How the caller relates to the repository; present for a caller with a session. */
+  relationship?: RepositoryRelationship;
+}
+
+export type RepositoryResource = Resource<Repository> & { meta: RepositoryMeta };
+
+/** Query for {@link IRepositoriesApi.query}. */
+export interface RepositoryQuery extends PageQuery {
+  /** Which repositories to list; defaults server-side to `['owner', 'editor']`. Must not be empty. */
+  relationships?: RepositoryRelationshipKind[];
+}
 
 /** Result of {@link IRepositoriesApi.getChangelog}. */
 export type ChangelogCollection = Collection<Resource<AuditLogEntry>>;
