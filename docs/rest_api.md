@@ -11,6 +11,10 @@ Localized endpoints accept `Accept-Language` / `Content-Language` headers and re
 ### Base URL & content types
 
 - The server listens on `http://localhost:8080` by default. All paths below are relative to that origin.
+- Every URL the API generates (links, `Location` headers, published page URLs) starts with the configured URL prefix
+  (`server.url_prefix` in `config/app.conf`, env `SERVER_URL_PREFIX`; empty by default): with `/api`, the link to
+  `/repos` is `/api/repos`. The paths in this document leave the prefix out. The server itself still serves them
+  without it, so a reverse proxy that publishes the API under the prefix must strip it.
 - JSON request bodies must be sent with `Content-Type: application/json`. Binary upload/download and the folder `text` subresource use the content types noted on those endpoints.
 - Some JSON requests and responses in this document are described as "json5" and include comments; these comments do not exist in actual JSON objects.
 - Timestamps are RFC 3339 / ISO 8601 in UTC (e.g. `2026-01-01T00:00:00Z`).
@@ -1414,6 +1418,8 @@ subtree that a `folder.delete` in the same plan removes — whether its `parent`
   (`urn:bootstrap:error:media-item-not-found`).
 - `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, title `Built-in Folder`) — a `folder.update`
   renaming or moving a [built-in folder](#built-in-folders), or a `folder.delete` of one.
+- `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, title `Invalid Folder Placement`) — a
+  `folder.create` or parent-changing `folder.update` putting a folder in a parent it can't be [placed in](#pages).
 - `422 Unprocessable Entity` (`urn:bootstrap:error:repository-would-have-no-owners`) — a `repository.update` op
   supplied `owners: []`.
 
@@ -1434,6 +1440,16 @@ created, and these cannot be renamed, moved, or deleted: such a request fails wi
 (`urn:bootstrap:error:validation-failed`, title `Built-in Folder`). Naming a built-in folder's current name or parent
 is not a change. Everything else about them (title, data, text, tags, permissions, media) can be changed as for any
 folder.
+
+### Pages
+
+A folder of type `page` is part of an album or of `/home`: a story, a gallery, or both (Markdown and media items), and
+a container for child pages, nested to any depth. A page with neither can group its child pages. Its `data` may carry
+the client's preferred rendering of the page, which the server doesn't interpret. A page is published with its album
+or `/home`, never on its own.
+
+A page must be in an `album`, a `page`, or `home`, and can contain only pages. Creating or moving a folder that would
+break either rule fails with `422` (`urn:bootstrap:error:validation-failed`, title `Invalid Folder Placement`).
 
 Folders are addressed with a `{folderVar}` path segment:
 
@@ -1566,8 +1582,9 @@ Creates a folder under an existing parent. `Content-Language` is required.
 }
 ```
 
-Valid folder types: `root`, `albums`, `home`, `album`, `album-collection`, `document`, `tag`, `media`, `media-source`,
-`picture`. The [built-in](#built-in-folders) types `root`, `albums`, `home`, and `media` cannot be used.
+Valid folder types: `root`, `albums`, `home`, `album`, `album-collection`, `page`, `tag`, `media`, `media-source`. The
+[built-in](#built-in-folders) types `root`, `albums`, `home`, and `media` cannot be used, and a
+[page](#pages) can be created only in an album, a page, or `/home`.
 
 `title` is either a bare string, stored under the request's `Content-Language`, or a `{ "<lang>": "…" }` object
 carrying every translation at once. An empty object (`{}`) is accepted and creates a folder with no title.
@@ -1592,8 +1609,9 @@ by default) is the folder's [inclusion in publications](#inclusion-in-publicatio
 - `409 Conflict` — a folder ID was specified, but a folder with this ID already exists
   (`urn:bootstrap:error:folder-already-exists`), or the parent already has a folder with this name
   (`urn:bootstrap:error:folder-path-conflict`)
-- `422 Unprocessable Entity` — invalid parent reference, a `cover` (which the new folder cannot contain yet), or a
-  built-in folder type (title `Built-in Folder`)
+- `422 Unprocessable Entity` — invalid parent reference, a `cover` (which the new folder cannot contain yet), a
+  built-in folder type (title `Built-in Folder`), or a parent the folder can't be [placed in](#pages) (title
+  `Invalid Folder Placement`)
 
 ---
 
@@ -1671,7 +1689,8 @@ Changing `cover`, `dateRange`, `tags`, or `includeInPublication` bumps the revis
   of an existing folder
 - `422 Unprocessable Entity` — e.g. a `cover` that is not an image, is `restricted`, or is not in the folder or its
   subfolders (`urn:bootstrap:error:validation-failed`, title `Invalid Folder Cover`), or a rename or move of a
-  [built-in folder](#built-in-folders) (title `Built-in Folder`)
+  [built-in folder](#built-in-folders) (title `Built-in Folder`), or a move to a parent the folder can't be
+  [placed in](#pages) (title `Invalid Folder Placement`)
 
 ---
 
@@ -1798,11 +1817,25 @@ The markdown body (GFM plus `::media`/`::gallery`/`::folder-list` embed directiv
 
 #### Request body
 
-The markdown text.
+The markdown text; or, with `Content-Type: application/json`, the markdown together with the folder's object
+definitions, so that a text and the objects it embeds change together:
+
+```json5
+{
+  "markdown": "# Trip\n\n::gallery[Picks]{key=\"picks\"}\n",
+  // optional; replaces every object definition of the folder (data.data.text.objects)
+  "objects": { "picks": { "type": "gallery", "selection": { "mode": "manual", "mediaItems": [ { "path": "./IMG_1.jpg" } ] } } }
+}
+```
+
+`markdown` is required. `objects` replaces the folder's [associated object data](folder_text.md#associated-object-data)
+and leaves the rest of its `data` unchanged; omitted, the objects stay as they are, and `null` is rejected. Objects are
+shared by all languages, so when they change, the references of the folder's other languages are recomputed too.
+Changing them also records `folder_data_changed` in the changelog.
 
 #### Request headers
 
-- `Content-Type: text/markdown`
+- `Content-Type: text/markdown` or `application/json`
 - `Content-Language` — language to store the body under (falls back to default when omitted)
 - `Revision-Id: <current-revision>` (required)
 
@@ -1830,7 +1863,8 @@ The markdown text.
 #### Responses
 
 - `200 OK` — body stored; validation result returned
-- `400 Bad Request` — missing or unparseable `Revision-Id`
+- `400 Bad Request` — missing or unparseable `Revision-Id`, or (`urn:bootstrap:error:validation-failed`) a JSON body
+  without `markdown`, or with `objects` that is `null` or not an object
 - `403 Forbidden` — caller lacks write permission
 - `404 Not Found`
 - `409 Conflict` — revision mismatch

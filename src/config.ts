@@ -7,7 +7,12 @@ export type FetchLike = typeof fetch;
 
 /** Options for constructing a {@link BootstrapClient}. */
 export interface ClientOptions {
-  /** API origin. Defaults to `http://localhost:8080`. */
+  /**
+   * API origin, optionally with a path prefix the API is published under
+   * (e.g. `https://example.com/api`). Server links that already start with
+   * that prefix (the server's `server.url_prefix`) are not prefixed twice.
+   * Defaults to `http://localhost:8080`.
+   */
   baseUrl?: string;
   /**
    * Default locale sent as `Accept-Language` (and `Content-Language` on writes)

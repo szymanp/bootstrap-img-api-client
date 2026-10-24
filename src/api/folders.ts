@@ -24,6 +24,7 @@ import type {
   PublicationPreview,
   PublicationsCollection,
   PublishResult,
+  PutTextOptions,
   PutTextResult,
   RegeneratePublicKeyResult,
   TextMediaCollection,
@@ -167,19 +168,28 @@ export class FoldersApi implements IFoldersApi {
    * reference found is persisted (resolved, missing, or malformed alike), and
    * ones that don't resolve are also reported in
    * {@link PutTextResult.unresolvedReferences}. Returns the new revision.
+   *
+   * With `options.objects`, the body is sent as JSON together with the
+   * folder's object definitions, replacing all of them (`data.text.objects`)
+   * so the text and the objects it embeds change together; the rest of the
+   * folder's `data` is unchanged. Objects are shared by all languages, so the
+   * references of the folder's other languages are recomputed too.
    */
   async putText(
     ref: FolderRefInput,
     markdown: string,
     revision: string,
-    options: Pick<WriteLanguageOptions, 'contentLanguage'> = {},
+    options: PutTextOptions = {},
   ): Promise<PutTextResult> {
     return this.transport.request({
       method: 'PUT',
       path: (await this.links()).updateFolderText(this.repoId, ref).href,
       contentLanguage: options.contentLanguage ?? this.transport.defaultLanguage,
       headers: { 'revision-id': revision },
-      body: { kind: 'markdown', value: markdown },
+      body:
+        options.objects === undefined
+          ? { kind: 'markdown', value: markdown }
+          : { kind: 'json', value: { markdown, objects: options.objects } },
       parse: async (res) => {
         const body = (await res.json()) as {
           meta?: { revision?: string };

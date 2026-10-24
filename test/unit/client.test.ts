@@ -41,6 +41,34 @@ describe('service-root link resolution', () => {
     expect(roots[0]?.method).toBe('GET');
     expect(mock.requests.map((r) => new URL(r.url).pathname)).toEqual(['/', '/repos;query', '/repos;query']);
   });
+
+  it('does not double a URL prefix that both baseUrl and server links carry', async () => {
+    const mock = new MockFetch().enqueue(
+      { status: 200, json: { links: { 'repos:query': { rel: 'repos:query', href: '/api/repos;query' } } } },
+      { status: 200, json: { meta: {}, records: [] } },
+    );
+    const client = new BootstrapClient({ baseUrl: 'https://example.com/api/', fetch: mock.fetch });
+
+    await client.repos.query();
+
+    expect(mock.requests.map((r) => r.url)).toEqual([
+      'https://example.com/api/',
+      'https://example.com/api/repos;query',
+    ]);
+  });
+
+  it('prepends the baseUrl path to server links without the prefix', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { meta: {}, records: [] } });
+    const client = new BootstrapClient({
+      baseUrl: 'https://example.com/api',
+      fetch: mock.fetch,
+      serviceRoot: serviceRootFixture,
+    });
+
+    await client.repos.query();
+
+    expect(mock.last.url).toBe('https://example.com/api/repos;query');
+  });
 });
 
 describe('auth', () => {
@@ -942,6 +970,28 @@ describe('folders', () => {
 
     const result = await client.folders('repo1').putText({ id: 'f1' }, '# Body', 'rev9');
     expect(result.unresolvedReferences).toEqual([]);
+  });
+
+  it('sends the markdown with object definitions as JSON when objects are given', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      headers: { 'revision-id': 'rev10' },
+      json: { meta: { revision: 'rev10' } },
+    });
+    const client = makeClient(mock);
+    const objects = {
+      picks: { type: 'gallery', selection: { mode: 'manual', mediaItems: [{ path: './IMG_1.jpg' }] } },
+    };
+
+    const result = await client
+      .folders('repo1')
+      .putText({ id: 'f1' }, '::gallery[Picks]{key="picks"}\n', 'rev9', { objects, contentLanguage: 'pl-PL' });
+    expect(mock.last.method).toBe('PUT');
+    expect(mock.last.headers.get('revision-id')).toBe('rev9');
+    expect(mock.last.headers.get('content-language')).toBe('pl-PL');
+    expect(mock.last.headers.get('content-type')).toContain('application/json');
+    expect(JSON.parse(mock.last.body!)).toEqual({ markdown: '::gallery[Picks]{key="picks"}\n', objects });
+    expect(result.revision).toBe('rev10');
   });
 
   it('reads recorded text-media references, including a 304 conditional GET', async () => {

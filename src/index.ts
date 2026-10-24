@@ -39,6 +39,7 @@ export type {
   PublicationsCollection,
   PublicationsMeta,
   PublishResult,
+  PutTextOptions,
   PutTextResult,
   RegeneratePublicKeyResult,
   TextMediaCollection,

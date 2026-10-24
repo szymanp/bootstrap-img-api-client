@@ -62,7 +62,7 @@ export class Transport {
   }
 
   private buildUrl(path: string, query?: QueryParams): string {
-    const url = new URL(this.config.baseUrl + path);
+    const url = new URL(joinBasePath(this.config.baseUrl, path));
     if (query) {
       for (const [key, value] of Object.entries(query)) {
         if (value !== undefined) url.searchParams.set(key, String(value));
@@ -92,6 +92,21 @@ export class Transport {
     this.config.credentials.decorate(headers);
     return headers;
   }
+}
+
+/**
+ * Append `path` to `baseUrl`. Server-generated links already carry the
+ * server's URL prefix (`server.url_prefix`), so when `baseUrl` ends in that
+ * same prefix (e.g. `https://host/api` and a link to `/api/repos`) the path
+ * is resolved against the origin instead of doubling the prefix.
+ */
+function joinBasePath(baseUrl: string, path: string): string {
+  const base = new URL(baseUrl);
+  const prefix = base.pathname.replace(/\/+$/, '');
+  if (prefix && (path === prefix || path.startsWith(prefix + '/') || path.startsWith(prefix + '?'))) {
+    return base.origin + path;
+  }
+  return baseUrl + path;
 }
 
 function encodeBody(body: RequestBody | undefined, headers: Headers): BodyInit | undefined {

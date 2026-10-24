@@ -9,6 +9,10 @@ import type { FolderPublicationStatus } from './publishing';
  * (`/`, `/albums`, `/home`, `/media`), no other folder of these types can be
  * created, and they cannot be renamed, moved, or deleted (422, title
  * `Built-in Folder`).
+ *
+ * A `page` must be in an `album`, a `page`, or `home`, and can contain only
+ * pages; creating or moving a folder that breaks either rule fails with 422
+ * (`ErrorType.ValidationFailed`, title `Invalid Folder Placement`).
  */
 export type FolderType =
   | 'root'
@@ -17,11 +21,16 @@ export type FolderType =
   | 'album'
   /** A folder which may contain other "album-collection"s and "album"s. */
   | 'album-collection'
-  | 'document'
+  /**
+   * Part of an album or of `/home`: a story, a gallery, or both (Markdown and
+   * media items), and a container for child pages, nested to any depth. Its
+   * `data` may carry the client's preferred rendering, which the server
+   * doesn't interpret. Published with its album or `/home`, never on its own.
+   */
+  | 'page'
   | 'tag'
   | 'media'
-  | 'media-source'
-  | 'picture';
+  | 'media-source';
 
 /** A reference to a folder used inside JSON request bodies. */
 export type FolderReference = { id: FolderId } | { path: string };

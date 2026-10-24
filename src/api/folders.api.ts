@@ -97,12 +97,18 @@ export interface IFoldersApi {
    * reference found is persisted (resolved, missing, or malformed alike), and
    * ones that don't resolve are also reported in
    * {@link PutTextResult.unresolvedReferences}. Returns the new revision.
+   *
+   * With `options.objects`, the body is sent as JSON together with the
+   * folder's object definitions, replacing all of them (`data.text.objects`)
+   * so the text and the objects it embeds change together; the rest of the
+   * folder's `data` is unchanged. Objects are shared by all languages, so the
+   * references of the folder's other languages are recomputed too.
    */
   putText(
     ref: FolderRefInput,
     markdown: string,
     revision: string,
-    options?: Pick<WriteLanguageOptions, 'contentLanguage'>,
+    options?: PutTextOptions,
   ): Promise<PutTextResult>;
 
   /**
@@ -351,6 +357,16 @@ export interface UnresolvedReference {
   /** `missing` (well-formed, no such target) or `malformed` (bad UUID, or a path escaping the repository root). */
   status: 'missing' | 'malformed';
   addressKind: 'by-id' | 'by-path';
+}
+
+/** Options for {@link IFoldersApi.putText}. */
+export interface PutTextOptions extends Pick<WriteLanguageOptions, 'contentLanguage'> {
+  /**
+   * Replaces every object definition of the folder (`data.text.objects`),
+   * keyed by the `key` the markdown's embed directives name. Omit to leave the
+   * objects as they are.
+   */
+  objects?: Record<string, unknown>;
 }
 
 /** Result of storing a folder's markdown body via {@link IFoldersApi.putText}. */
