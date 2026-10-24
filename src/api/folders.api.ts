@@ -16,6 +16,7 @@ import type {
   UpdateFolderInput,
 } from '../types/folders';
 import type { MediaMetadata } from '../types/media';
+import type { UserSummary } from '../types/users';
 import type {
   PublicationDiagnostic,
   PublicationPreviewInput,
@@ -120,6 +121,9 @@ export interface IFoldersApi {
    * Repository roles (owner/editor) are not included, nor are grants to
    * anonymous principals or permissions given by access links (they still
    * apply; access-link permissions are managed through the link).
+   * `related.users` names the users among the listed principals, sorted by
+   * email. The caller must be a repository owner or editor, otherwise a 403
+   * `ApiError`.
    */
   getPermissions(ref: FolderRefInput, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<PermissionsCollection>;
 
@@ -245,7 +249,14 @@ export interface IFoldersApi {
 }
 
 export type FolderResource = Resource<Folder, FolderRelated>;
-export type PermissionsCollection = Collection<Resource<EffectivePermission>, { folder?: FolderResource[] }>;
+/** Related resources attached to a {@link IFoldersApi.getPermissions} response. */
+export interface PermissionsRelated {
+  folder?: FolderResource[];
+  /** The users among the listed principals, sorted by email. */
+  users?: UserSummary[];
+}
+
+export type PermissionsCollection = Collection<Resource<EffectivePermission>, PermissionsRelated>;
 /** Result of a media-membership query: membership records plus the full media-item resources. */
 export type MediaMembershipCollection = Collection<
   Resource<MediaMembership>,

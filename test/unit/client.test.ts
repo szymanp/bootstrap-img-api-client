@@ -331,6 +331,21 @@ describe('repositories', () => {
     expect(url.searchParams.get('representation')).toBe('original');
   });
 
+  it('parses related users on get', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: { revision: 'r1' },
+        data: { id: 'id1', owners: [{ type: 'user', email: 'owner@example.com' }] },
+        related: { users: [{ email: 'owner@example.com', firstName: 'Jan', lastName: 'Kowalski' }] },
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.repos.get('id1');
+    expect(result.related?.users).toEqual([{ email: 'owner@example.com', firstName: 'Jan', lastName: 'Kowalski' }]);
+  });
+
   it('sends fields as a top-level body field on query', async () => {
     const mock = new MockFetch().enqueue({ status: 200, json: { meta: {}, records: [] } });
     const client = makeClient(mock);
@@ -788,6 +803,29 @@ describe('folders', () => {
       },
     ]);
     expect(client.folders('repo1').getCoverVariants({ meta: {}, data: { id: 'f1' } })).toEqual([]);
+  });
+
+  it('lists effective permissions with related folders and users', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: {
+        meta: {},
+        records: [
+          { data: { principal: { type: 'user', email: 'u@e.com' }, folder: 'f1', permission: 'read' } },
+        ],
+        related: {
+          folder: [{ meta: {}, data: { id: 'f1' } }],
+          users: [{ email: 'u@e.com', firstName: 'Jan', lastName: 'Kowalski' }],
+        },
+      },
+    });
+    const client = makeClient(mock);
+
+    const result = await client.folders('repo1').getPermissions(FolderById());
+    expect(mock.last.method).toBe('GET');
+    expect(result.records[0]?.data.permission).toBe('read');
+    expect(result.related?.folder?.[0]?.data.id).toBe('f1');
+    expect(result.related?.users).toEqual([{ email: 'u@e.com', firstName: 'Jan', lastName: 'Kowalski' }]);
   });
 
   it('wraps permission records under data and sends PATCH', async () => {

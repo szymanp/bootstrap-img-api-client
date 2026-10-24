@@ -12,12 +12,14 @@ import type {
   RepositoryRelationshipKind,
   UpdateRepositoryInput,
 } from '../types/repositories';
+import type { UserSummary } from '../types/users';
 
 /** Repository endpoints. */
 export interface IRepositoriesApi {
   /**
    * Create a repository. The title is stored under `Content-Language`
-   * (the client default unless overridden).
+   * (the client default unless overridden). With `owners` or `editors`,
+   * `related.users` names the users among them, sorted by email.
    *
    * @param input The repository's name and title.
    * @param options `Content-Language`/`Accept-Language` overrides and a field selector.
@@ -55,7 +57,8 @@ export interface IRepositoriesApi {
    * it (their own, or `public`'s) reads only its summary (`id`,
    * `organizationName`, `name`, `title`, no `meta.revision`); anyone else gets
    * a 404 `ApiError`, as for a repository that doesn't exist. With a session,
-   * `meta.relationship` tells how the caller relates to it.
+   * `meta.relationship` tells how the caller relates to it. With `owners` or
+   * `editors`, `related.users` names the users among them, sorted by email.
    *
    * @param repoId The repository's id.
    * @param options Field selector, representation, and `Accept-Language` override.
@@ -78,7 +81,9 @@ export interface IRepositoriesApi {
    * repository's owner role for any change, not just `owners`/`editors`.
    * `owners`/`editors`, when given, wholesale-replace that role's principals;
    * `owners: []` is rejected with a 422 `ApiError`
-   * (`ErrorType.RepositoryWouldHaveNoOwners`) and nothing is applied.
+   * (`ErrorType.RepositoryWouldHaveNoOwners`) and nothing is applied. With
+   * `owners` or `editors`, `related.users` names the users among them,
+   * sorted by email.
    *
    * @param repoId The repository's id.
    * @param revision The repository's current `meta.revision`.
@@ -231,7 +236,13 @@ export interface RepositoryMeta extends Meta {
   relationship?: RepositoryRelationship;
 }
 
-export type RepositoryResource = Resource<Repository> & { meta: RepositoryMeta };
+/** Related resources attached to a single-repository response. */
+export interface RepositoryRelated {
+  /** The users among the repository's `owners` and `editors`, sorted by email; present when those fields are. */
+  users?: UserSummary[];
+}
+
+export type RepositoryResource = Resource<Repository, RepositoryRelated> & { meta: RepositoryMeta };
 
 /** Query for {@link IRepositoriesApi.query}. */
 export interface RepositoryQuery extends PageQuery {

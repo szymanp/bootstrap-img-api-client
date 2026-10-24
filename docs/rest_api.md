@@ -662,6 +662,15 @@ Retrieves a repository, as far as the caller may see it:
 For a caller with a session, `meta.relationship` (as in [`POST /repos;query`](#post-reposquery)) tells how the caller
 relates to the repository, and `links` has `repos:follow` or `repos:unfollow`.
 
+With `owners` or `editors`, the response names the users among them under `related.users`, sorted by email, so a
+client can show who they are. The same goes for the responses of `POST /repos` and `POST /repos/{repoId}`.
+
+```json
+"related": {
+  "users": [ { "email": "owner@example.com", "firstName": "Jan", "lastName": "Kowalski" } ]
+}
+```
+
 #### Query parameters
 
 - `fields` (optional) — comma-separated field selector over `organizationName` (the name of the repository's
@@ -1885,7 +1894,7 @@ Requires `Accept-Language` to select the right language version of the text. Sup
 
 Lists the folder's **effective** permissions: explicit grants stored on the folder itself plus grants inherited from
 its ancestors. There is one record per (principal, permission) pair, taken from the nearest folder that grants it (the
-folder itself wins over an ancestor).
+folder itself wins over an ancestor). The caller must be a repository owner or editor.
 
 #### Response body
 
@@ -1895,7 +1904,10 @@ folder itself wins over an ancestor).
   "records": [
     { "data": { "principal": { "type": "user", "email": "user@example.com" }, "folder": "<folder-uuid>", "permission": "read" } }
   ],
-  "related": { "folder": [ { "meta": …, "data": …, "links": … } ] }
+  "related": {
+    "folder": [ { "meta": …, "data": …, "links": … } ],
+    "users": [ { "email": "user@example.com", "firstName": "Jan", "lastName": "Kowalski" } ]
+  }
 }
 ```
 
@@ -1908,10 +1920,12 @@ folder itself wins over an ancestor).
   apply to the principal.
 - Permissions given by [access links](#access-links) are not listed either, and `PATCH` doesn't change them: a `grant`
   adds a grant of its own beside them, and `default` removes only that one. They are managed through the link.
+- `related.users` names the users among the listed principals, sorted by email.
 
 #### Responses
 
 - `200 OK`
+- `403 Forbidden` — caller is not an owner or editor of the repository
 - `404 Not Found`
 
 ---

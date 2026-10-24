@@ -11,6 +11,7 @@ export type {
   RepositoryMeta,
   RepositoryQuery,
   RepositoryResource,
+  RepositoryRelated,
   GetRepositoryByNameOptions,
   ChangelogCollection,
   RepositoryTagsCollection,
@@ -33,6 +34,7 @@ export type {
   FolderText,
   MediaMembershipCollection,
   PermissionsCollection,
+  PermissionsRelated,
   PublicationPreview,
   PublicationsCollection,
   PublicationsMeta,
@@ -160,6 +162,7 @@ export type {
   RegisterUserInput,
   UpdateUserInput,
   User,
+  UserSummary,
   UserSettings,
 } from './types/users';
 export type {

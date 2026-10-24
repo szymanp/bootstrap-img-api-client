@@ -39,6 +39,16 @@ export interface User {
 }
 
 /**
+ * A user as named in a response's `related.users` (e.g. a repository's owners
+ * and editors, or the principals of a folder's permissions).
+ */
+export interface UserSummary {
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+/**
  * A user's settings: an arbitrary JSON object owned by the client. The server
  * stores it verbatim and never interprets it.
  */
