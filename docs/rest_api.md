@@ -2298,7 +2298,8 @@ publishing; only albums and `/home` can be previewed.
   "meta": { "canPublish": false, "language": "en-us" },
   "tree": [
     { "id": 0, "depth": 0, "position": 0, "group": false, "title": "Trip", "folder": "<folder-uuid>",
-      "key": "trip-k3x9p2q", "name": "trip", "type": "album" }   // `key` once the folder has one
+      "key": "trip-k3x9p2q", "name": "trip", "type": "album",   // `key` once the folder has one
+      "data": { "presentation": "story" } }
   ],
   "page": { "data": { "id": 0, "folder": "<folder-uuid>", …, "cover": …, "dateRange": …, "directCount": 0,
                       "effectiveCount": 1 },
@@ -2309,7 +2310,8 @@ publishing; only albums and `/home` can be previewed.
 ```
 
 - `canPublish` is `false` when a diagnostic is an error: errors are reported here, not refused.
-- The rows of `tree` are those publishing would make, each with the live `folder` it comes from.
+- The rows of `tree` are those publishing would make, each with the live `folder` it comes from. A page's row has
+  the primitive properties of its `data`, as in the [published tree](#get-publishedrepoidpublicationrootvartree).
 - In `text`, a reference to a page of the preview names its row, `"page": 1`, instead of a published `folder` URL
   (it has none yet). References to other publications and folder-list queries scoped outside resolve as when published.
 
@@ -2571,14 +2573,20 @@ the page has no text in it): with this, the client resolves nothing else.
 
 The publication's whole tree, unpaginated, in pre-order: every row with its place, `id` (local to the revision),
 `parentId` (absent for the root), `depth`, and `position` among its siblings. A page has its `key`, `name`, `type`,
-`title`, and a `self` link; a **group** (`"group": true`) is an excluded folder kept for the structure of its included
-descendants, with its `title` only (empty when it has none).
+`title`, `data`, and a `self` link; a **group** (`"group": true`) is an excluded folder kept for the structure of its
+included descendants, with its `title` only (empty when it has none).
+
+A page's `data` holds the top-level properties of the folder's published `data` whose values are strings, numbers,
+or booleans, so a client can read the simple properties it has stored (say, a preferred rendering) for the whole
+tree at once. Properties holding an object, an array, or `null` (including the `text` object data) are left out; the
+page resource has the whole `data`.
 
 ```json
 {
   "meta": { "publication": { … } },
   "records": [
-    { "data": { "id": 0, "depth": 0, "position": 0, "group": false, "title": "Trip", "key": "trip-…", "name": "trip", "type": "album" },
+    { "data": { "id": 0, "depth": 0, "position": 0, "group": false, "title": "Trip", "key": "trip-…", "name": "trip", "type": "album",
+                "data": { "presentation": "story" } },
       "links": { "self": { "rel": "self", "href": "…" } } },
     { "data": { "id": 1, "parentId": 0, "depth": 1, "position": 0, "group": true, "title": "Hidden" } }
   ]

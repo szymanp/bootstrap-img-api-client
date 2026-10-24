@@ -1225,7 +1225,18 @@ describe('published content', () => {
       { status: 200, json: { meta: { publication: { revision: 1, isDefault: true } }, data: { key: 'narty-k' } } },
       { status: 200, json: { meta: { publication: { revision: 2, isDefault: false } }, data: {} } },
       { status: 200, json: { meta: { publication: { revision: 2, isDefault: false } }, data: {} } },
-      { status: 200, json: { meta: { publication: { revision: 2 } }, records: [] } },
+      {
+        status: 200,
+        json: {
+          meta: { publication: { revision: 2 } },
+          records: [
+            {
+              data: { id: 0, depth: 0, position: 0, group: false, title: 'Narty', key: 'narty-k', name: 'narty',
+                type: 'album', data: { presentation: 'story' } },
+            },
+          ],
+        },
+      },
     );
     const published = makeClient(mock).published('repo1');
 
@@ -1240,8 +1251,9 @@ describe('published content', () => {
     await published.getText({ key: 'narty-k', revision: 2 }, { sub: 'day1-x' });
     expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k;rev=2/sub/day1-x/text');
 
-    await published.tree({ key: 'narty-k', revision: 2 });
+    const tree = await published.tree({ key: 'narty-k', revision: 2 });
     expect(mock.last.url).toBe('http://localhost:8080/published/repo1/narty-k;rev=2/tree');
+    expect(tree.records[0]?.data.data).toEqual({ presentation: 'story' });
   });
 
   it('reads a page text bundle', async () => {

@@ -109,7 +109,7 @@ export interface PublicationPreviewInput {
 
 /**
  * One row of a publication's tree, in pre-order. A page has `key`, `name`,
- * `type`, and `title`; a group (`group: true`) is an excluded folder kept for
+ * `type`, `title`, and `data`; a group (`group: true`) is an excluded folder kept for
  * the structure of its included descendants, with its `title` only.
  */
 export interface PublishedTreeRow {
@@ -126,6 +126,13 @@ export interface PublishedTreeRow {
   key?: FolderPublicKey;
   name?: string;
   type?: FolderType;
+  /**
+   * A page's top-level `data` properties whose values are strings, numbers,
+   * or booleans (say, a preferred rendering); objects, arrays, and `null`
+   * (including the `text` object data) are left out. The page resource has
+   * the whole `data`.
+   */
+  data?: Record<string, string | number | boolean>;
   /** In a preview: the live folder the row comes from. */
   folder?: FolderId;
   [key: string]: unknown;
