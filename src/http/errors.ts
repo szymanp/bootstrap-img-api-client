@@ -24,7 +24,15 @@ export const ErrorType = {
    */
   RegisteredUserRequired: 'urn:bootstrap:error:registered-user-required',
   UserNotFound: 'urn:bootstrap:error:user-not-found',
+  /**
+   * @deprecated No longer returned: `POST /users` answers `204` for an
+   * existing address too (no enumeration).
+   */
   UserAlreadyExists: 'urn:bootstrap:error:user-already-exists',
+  /**
+   * @deprecated No longer returned: verifying an already-verified user is a
+   * `422` {@link ErrorType.InvalidToken}, like every failed verification.
+   */
   UserAlreadyVerified: 'urn:bootstrap:error:user-already-verified',
   UserNotVerified: 'urn:bootstrap:error:user-not-verified',
   TokenTooRecent: 'urn:bootstrap:error:token-too-recent',
@@ -71,6 +79,18 @@ export const ErrorType = {
    * link has expired, been deactivated or deleted, or has no folders left.
    */
   AccessLinkUnavailable: 'urn:bootstrap:error:access-link-unavailable',
+  /**
+   * `429`: too many requests from this client address; retry after the
+   * `Retry-After` delay in seconds (on `ApiError.response`).
+   */
+  RateLimited: 'urn:bootstrap:error:rate-limited',
+  /** `413`: the request body (16 MiB) or media upload (4 GiB) is over the server's limit. */
+  RequestTooLarge: 'urn:bootstrap:error:request-too-large',
+  /**
+   * `422`: a variant, rendition, or poster was requested for an image or video
+   * over the server's pixel limit, which is stored but never processed.
+   */
+  ImageTooLarge: 'urn:bootstrap:error:image-too-large',
   InternalError: 'urn:bootstrap:error:internal-error',
 } as const;
 

@@ -10,7 +10,7 @@ export class UsersApi implements IUsersApi {
     private readonly links: LinksProvider,
   ) {}
 
-  /** Register a new user and send a verification email. Always returns 204. */
+  /** Register a new user and send a verification email. Always returns 204, even for an existing address. */
   async register(input: RegisterUserInput, options: EmailLanguageOptions = {}): Promise<void> {
     return this.transport.request({
       method: 'POST',
@@ -50,7 +50,7 @@ export class UsersApi implements IUsersApi {
     });
   }
 
-  /** Resend the verification email. `userIdOrEmail` is a UUID or an email. */
+  /** Resend the email of `register` (verification code or login token). `userIdOrEmail` is a UUID or an email. */
   async resendVerification(userIdOrEmail: string, options: EmailLanguageOptions = {}): Promise<void> {
     return this.transport.request({
       method: 'POST',
@@ -61,14 +61,15 @@ export class UsersApi implements IUsersApi {
   }
 
   /**
-   * Confirm email ownership with the token from the verification email. Also
-   * starts a session; the session cookie is captured automatically.
+   * Confirm email ownership with the token from the verification email
+   * (trimmed of pasted whitespace). Also starts a session; the session cookie
+   * is captured automatically.
    */
   async verify(userIdOrEmail: string, token: string): Promise<void> {
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).verifyUser(userIdOrEmail).href,
-      body: { kind: 'json', value: { token } },
+      body: { kind: 'json', value: { token: token.trim() } },
       parse: parseVoid,
     });
   }

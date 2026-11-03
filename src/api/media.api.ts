@@ -15,8 +15,13 @@ import type {
 /** Media-item endpoints, scoped to a single repository. */
 export interface IMediaApi {
   /**
-   * Upload a media item into a folder under `filename`. `contentType` must be an
-   * `image/*` or `video/*` type. Returns the assigned media-item id.
+   * Upload a media item into a folder under `filename`. The server detects the
+   * type from the content: a JPEG, PNG, WebP, or TIFF image, a configured
+   * camera raw type, or a video; anything else (including SVG) is a 415.
+   * Over the upload limit (4 GiB by default) is a 413
+   * `ErrorType.RequestTooLarge`. An image or video over the pixel limit is
+   * stored but never processed (requesting its variants is a 422
+   * `ErrorType.ImageTooLarge`). Returns the assigned media-item id.
    */
   uploadToFolder(
     folder: FolderRefInput,
@@ -26,8 +31,8 @@ export interface IMediaApi {
   ): Promise<UploadResult>;
 
   /**
-   * Upload a media item under a known stable id. `contentType` must be an
-   * `image/*` or `video/*` type. The user must be a repository owner or editor.
+   * Upload a media item under a known stable id. Accepts the same types and
+   * sizes as {@link uploadToFolder}. The user must be a repository owner or editor.
    * Throws an {@link ApiError} with status `409` if an item already exists at
    * that id whose original blob differs from the uploaded binary. Returns the
    * media-item id echoed by the server, and whether the bytes were sent.
@@ -72,7 +77,8 @@ export interface IMediaApi {
    * With `size`, throws a 404 `ApiError` of type `ErrorType.MediaItemNotFound`
    * when the image has no such variant (unknown size, or the image already fits
    * within it), or `ErrorType.MediaVariantNotReady` when the image hasn't been
-   * processed yet — retry later.
+   * processed yet — retry later, or a 422 `ErrorType.ImageTooLarge` when the
+   * image is over the server's pixel limit and is never processed.
    */
   download(ref: MediaRef, options?: DownloadOptions): Promise<DownloadResult>;
 

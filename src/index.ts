@@ -6,6 +6,7 @@ export type { ClientOptions, FetchLike } from './config';
 // Resource API interfaces (the user-facing types for the sub-clients).
 export type { IAuthApi } from './api/auth.api';
 export type { IUsersApi } from './api/users.api';
+export { isVerificationToken, VERIFICATION_TOKEN_PATTERN } from './api/users.api';
 export type {
   IRepositoriesApi,
   RepositoryMeta,
@@ -214,6 +215,7 @@ export type {
   FolderDateRangeInput,
   FolderTag,
   FolderId,
+  FolderListOrderBy,
   FolderListQuery,
   FolderReference,
   FolderRelated,

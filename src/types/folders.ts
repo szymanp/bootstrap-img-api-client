@@ -179,6 +179,7 @@ export interface CreateFolderInput {
 /** Mutable fields for `POST /folders/{repoId}/{folderVar}` (update). All optional. */
 export interface UpdateFolderInput {
   name?: string;
+  /** Moves the folder; needs `write` on the new parent (naming the current parent is not a move). */
   parent?: FolderReference;
   /** Bare string merges under Content-Language; object replaces all translations. */
   title?: Localized;
@@ -347,7 +348,7 @@ export interface TreeQuery {
   depth?: number;
 }
 
-/** Query for a folder's `action;list`: a flat list of its subfolders, ordered by path. */
+/** Query for a folder's `action;list`: a flat list of its subfolders, by path unless `orderBy` says otherwise. */
 export interface FolderListQuery extends PageQuery {
   /**
    * Levels below the folder to include (`>= 1`; `1` = direct children only),
@@ -366,4 +367,24 @@ export interface FolderListQuery extends PageQuery {
    * Paging applies after it; an invalid tag is a 400.
    */
   tags?: FolderTag[];
+  /** Order of the list; `{ property: 'tree', order: 'ascending' }` when omitted. Paging applies after it. */
+  orderBy?: FolderListOrderBy;
+}
+
+/** Ordering for `POST /folders/{repoId}/{folderVar}/action;list`. */
+export interface FolderListOrderBy {
+  /**
+   * - `"tree"` (default) — by path, so each folder comes right before its own
+   *   descendants; the only order that keeps the hierarchy together when
+   *   `depth` goes below the direct children
+   * - `"name"` — by `name`, compared by code point
+   * - `"title"` — by the title in the negotiated `Accept-Language` (else
+   *   another stored language), falling back to `name`; Unicode root collation
+   * - `"dateRangeStart"` — by the start of the explicit, else automatic,
+   *   `dateRange`; folders without one sort last regardless of `order`
+   *
+   * Ties are ordered by path.
+   */
+  property: 'tree' | 'name' | 'title' | 'dateRangeStart';
+  order: SortOrder;
 }

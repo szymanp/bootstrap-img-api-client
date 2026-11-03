@@ -5,7 +5,9 @@ export interface IAuthApi {
   /**
    * Request a one-time login token for `email`. Always succeeds (no user
    * enumeration). For test users the token is returned in the body; otherwise
-   * `{}` and the token is sent by email.
+   * `{}` and the token is sent by email. A user has at most three unexpired
+   * tokens (each lasts 30 minutes): beyond that no email is sent, though the
+   * call still succeeds. Logging in with a token uses it up.
    */
   sendToken(email: string): Promise<SendTokenResult>;
 

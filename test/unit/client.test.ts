@@ -4,6 +4,7 @@ import {
   BootstrapClient,
   ErrorType,
   isApiError,
+  isVerificationToken,
   MemoryCookieStore,
   type HrefLink,
   type RevisionConflictProblem,
@@ -166,6 +167,23 @@ describe('users', () => {
     const headers = new Headers();
     credentials.decorate(headers);
     expect(headers.get('cookie')).toBe('session=opaque');
+  });
+
+  it('trims pasted whitespace from the verification token', async () => {
+    const mock = new MockFetch().enqueue({ status: 204 });
+    const client = makeClient(mock);
+
+    await client.users.verify('jan@example.com', '  tok-123\n');
+    expect(JSON.parse(mock.last.body!)).toEqual({ token: 'tok-123' });
+  });
+
+  it('checks the verification token format', () => {
+    const token = 'A'.repeat(42) + 'w';
+    expect(isVerificationToken(token)).toBe(true);
+    expect(isVerificationToken(` ${token}\n`)).toBe(true);
+    expect(isVerificationToken('A'.repeat(42) + 'B')).toBe(false);
+    expect(isVerificationToken('A'.repeat(41) + 'w')).toBe(false);
+    expect(isVerificationToken('A'.repeat(41) + '+w')).toBe(false);
   });
 
   it('updates a user profile and returns the user', async () => {
@@ -750,6 +768,19 @@ describe('folders', () => {
     expect(mock.last.url).toBe('http://localhost:8080/folders/repo1/path;albums/action;list');
     expect(JSON.parse(mock.last.body!)).toEqual({ query: { depth: null, folderType: ['album'] } });
     expect(res.meta.folderType).toEqual(['album']);
+  });
+
+  it('sends orderBy on action;list and reads it back from meta', async () => {
+    const orderBy = { property: 'dateRangeStart', order: 'desc' } as const;
+    const mock = new MockFetch().enqueue({
+      status: 200,
+      json: { meta: { offset: 0, limit: 20, orderBy }, records: [] },
+    });
+    const client = makeClient(mock);
+
+    const res = await client.folders('repo1').list({ path: '/albums' }, { orderBy, offset: 0, limit: 20 });
+    expect(JSON.parse(mock.last.body!)).toEqual({ query: { orderBy, offset: 0, limit: 20 } });
+    expect(res.meta.orderBy).toEqual(orderBy);
   });
 
   it('sends tags on action;list and reads them back from meta', async () => {

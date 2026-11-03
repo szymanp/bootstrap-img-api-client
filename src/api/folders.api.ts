@@ -53,15 +53,21 @@ export interface IFoldersApi {
   listRoot(query?: PageQuery, options?: Pick<ReadOptions, 'acceptLanguage'>): Promise<Collection<FolderResource>>;
 
   /**
-   * List a folder's subfolders as a flat list, ordered by path (so each folder
-   * comes before its own descendants; `data.path` tells their nesting apart).
-   * `query.depth` defaults to `1` (direct children only); `null` includes the
-   * whole subtree. `query.folderType` keeps only folders of those types (their
-   * descendants within `depth` are still walked, so a listed folder's parent may
-   * be missing). `query.tags` keeps only folders having at least one of those
-   * tags. Without `offset`/`limit`, every folder is returned; paging applies
-   * after the type and tag filters. `meta` echoes `offset` and `limit` (`null`
-   * when absent) and, when given, `depth`, `folderType`, and `tags` (normalized).
+   * List a folder's subfolders as a flat list, ordered by path unless
+   * `query.orderBy` says otherwise (by path, each folder comes before its own
+   * descendants; `data.path` tells their nesting apart). `query.depth` defaults
+   * to `1` (direct children only); `null` includes the whole subtree.
+   * `query.folderType` keeps only folders of those types (their descendants
+   * within `depth` are still walked, so a listed folder's parent may be
+   * missing). `query.tags` keeps only folders having at least one of those
+   * tags. `query.orderBy` sorts by `tree` (path), `name`, `title` (depends on
+   * the negotiated language), or `dateRangeStart` (the automatic range is
+   * computed in the background, so a folder can move between pages). Without
+   * `offset`/`limit`, every folder is returned; paging applies after the type
+   * and tag filters, in the requested order. `meta` echoes `offset` and
+   * `limit` (`null` when absent) and, when given, `depth`, `folderType`,
+   * `tags` (normalized), and `orderBy`. An invalid `orderBy` is a 400
+   * `ErrorType.ValidationFailed`.
    */
   list(
     ref: FolderRefInput,

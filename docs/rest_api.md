@@ -24,7 +24,7 @@ Localized endpoints accept `Accept-Language` / `Content-Language` headers and re
 Authentication is **cookie-based**. The flow:
 
 1. `POST /auth/action;send-token` with the user's email to request a one-time token (delivered by email; test users get it in the response body).
-2. `POST /auth` with header `Authorization: X-Token <email>:<token>`. On success the server replies `204` with a `Set-Cookie: session=<opaque>; Path=/` header.
+2. `POST /auth` with header `Authorization: X-Token <email>:<token>`. On success the server replies `204` with a `Set-Cookie: session=<opaque>; Path=/; SameSite=Lax; Secure; HttpOnly` header (`Secure` is left out where the server is configured for plain HTTP, `server.secure_cookies`).
 3. The client must **store that `session` cookie and send it on every subsequent request** that requires authentication. A standard cookie jar handles this automatically.
 4. `POST /auth/action;logout` terminates the session; the response clears the cookie (`session=` with `Max-Age=0`).
 
@@ -32,6 +32,22 @@ Without an account, a client can log in as an **anonymous principal**: an indivi
 permissions and survives logout (see [POST /auth](#post-auth)). Every `/auth` response is `Cache-Control: no-store`.
 
 `GET /auth/session` reports the current session, or `401` if the cookie is missing/expired/invalid. Verifying a newly registered user (`POST /users/{userIdOrEmail}/action;verify-user`) also starts a session and sets the cookie, as in step 2. Endpoints that require a session respond `401 Unauthorized` (with `WWW-Authenticate: Cookie`) when none is present, and `403 Forbidden` when the session is valid but lacks permission. Endpoints for registered users only (a user's profile and settings, organizations, and creating repositories) answer a session of any other principal with `403` (`urn:bootstrap:error:registered-user-required`). User registration/verification and `auth:*` endpoints are the only ones reachable without a session.
+
+### Limits
+
+Requests are limited per client address: all of them (6000 a minute by default), and more strictly those that sign
+in, register, verify a user, or redeem an access link or recovery token (20 a minute by default; `rate_limits` in
+`config/app.conf`). Over a limit, the answer is `429 Too Many Requests`
+(`urn:bootstrap:error:rate-limited`) with a `Retry-After` header in seconds.
+
+A request body may have at most 16 MiB (`server.max_body_bytes`), a media upload 4 GiB
+(`media_items.max_upload_bytes`). A larger one is refused with `413 Content Too Large`
+(`urn:bootstrap:error:request-too-large`): at once when its `Content-Length` says so, else when the server has read
+past the limit.
+
+Every response carries `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none';
+frame-ancestors 'none'; sandbox`, `X-Frame-Options: DENY`, and `Referrer-Policy: no-referrer`: the API serves no
+pages, and a browser must never run a response as one.
 
 ### Resource envelope
 
@@ -107,7 +123,7 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:bad-request` / `:validation-failed` | 400 / 422 |
 | `urn:bootstrap:error:unauthorized` | 401 |
 | `urn:bootstrap:error:forbidden` / `:registered-user-required` | 403 |
-| `urn:bootstrap:error:user-not-found` / `:user-already-exists` / `:user-already-verified` / `:user-not-verified` | 404 / 409 |
+| `urn:bootstrap:error:user-not-found` / `:user-not-verified` | 404 / 409 |
 | `urn:bootstrap:error:token-too-recent` / `:token-not-found` / `:invalid-token` / `:token-expired` | 400 / 401 / 404 |
 | `urn:bootstrap:error:repository-not-found` / `:repository-name-conflict` | 404 / 409 |
 | `urn:bootstrap:error:repository-would-have-no-owners` | 422 |
@@ -128,6 +144,9 @@ errors; clients should ignore members they don't recognize. Known `type` values:
 | `urn:bootstrap:error:publication-not-found` | 404 |
 | `urn:bootstrap:error:principal-not-found` | 404 |
 | `urn:bootstrap:error:access-link-not-found` / `:access-link-unavailable` | 404 |
+| `urn:bootstrap:error:rate-limited` | 429 |
+| `urn:bootstrap:error:request-too-large` | 413 |
+| `urn:bootstrap:error:image-too-large` | 422 |
 | `urn:bootstrap:error:internal-error` | 500 |
 
 ---
@@ -307,6 +326,9 @@ variant URLs are discovered today rather than built from a root template.
 
 Issues a one-time login token for the given email. Always returns 204 to avoid user enumeration. Test users receive the token in the response body.
 
+A user has at most three unexpired tokens (each lasts 30 minutes): a request beyond that sends no email, but still
+answers `204`. Signing in with a token uses it up.
+
 #### Request body
 
 ```json
@@ -464,7 +486,18 @@ Returns details about the current session.
 
 ### POST /users
 
-Registers a new user and sends a verification email. Always returns 204 to avoid enumeration.
+Registers a new user and sends a verification email. The answer is the same whether or not the address already has an
+account, so a caller can't find out which addresses do; the owner of the address learns it by email instead:
+
+| The address | Email sent |
+| --- | --- |
+| has no account | a verification code (an account is created, unverified) |
+| belongs to an unverified user | a new verification code, unless one was sent less than 3 minutes ago |
+| belongs to a verified user | "You already have an account", with a login token for `POST /auth`, unless the user already has three unexpired login tokens |
+
+The existing user is never changed: the names in the request are ignored. A client should therefore show the same
+"Check your email" step after every registration, and let the user both enter a verification code and log in with a
+token from there.
 
 #### Request body
 
@@ -553,18 +586,20 @@ Any JSON object (`Content-Type: application/json`). Arrays, scalars, and `null` 
 
 ### POST /users/{userIdOrEmail}/action;resend-verification-token
 
-Resends the verification email. `userIdOrEmail` is a UUID or an email address.
+Resends the email of `POST /users`: a new verification code to an unverified user (unless one was sent less than 3
+minutes ago), a login token to a verified one. An unknown user gets nothing. `userIdOrEmail` is a UUID or an email
+address.
 
 #### Responses
 
-- `204 No Content`
+- `204 No Content` — in every case
 
 ---
 
 ### POST /users/{userIdOrEmail}/action;verify-user
 
 Confirms email ownership using the token from the verification email, activating the account, and logs the user in:
-like `POST /auth`, it starts a session and sets the `session` cookie (`Set-Cookie: session=<opaque>; Path=/`), so
+like `POST /auth`, it starts a session and sets the `session` cookie (as for `POST /auth`), so
 no separate token login is needed after registration.
 
 #### Request body
@@ -573,12 +608,17 @@ no separate token login is needed after registration.
 { "token": "<token-from-email>" }
 ```
 
+The token is 32 random bytes as unpadded base64url: exactly 43 characters of `A–Z`, `a–z`, `0–9`, `-`, and `_`,
+case-sensitive, matching `^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$` (the last character carries two zero bits). The
+server compares it exactly, without trimming, so a client should trim pasted whitespace; the format check is only a
+help for the user, since every wrong token gets the same `422`. A token is valid for 30 minutes. It is URL-safe, so
+it can also be passed in a link.
+
 #### Responses
 
 - `204 No Content` — user verified, session started
-- `404 Not Found` — no such user
-- `409 Conflict` — user already verified
-- `422 Unprocessable Entity` — wrong or expired token, or no pending verification token
+- `422 Unprocessable Entity` (`urn:bootstrap:error:invalid-token`) — the verification failed: a wrong or expired
+  token, no pending token, an unknown user, or one already verified. The answer is the same in every case.
 
 ---
 
@@ -1252,8 +1292,8 @@ send an object to set specific languages.
 - `media` — the same patch array `PATCH .../media` accepts.
 
 It also accepts `cover`, `dateRange`, `tags`, and `includeInPublication`, as on `POST /folders/{repoId}`. Unlike there, a `cover` can be valid: it is
-checked after the operation's `media` patches, so a plan can link an item into the new folder and make it the
-cover.
+checked after every operation's `media` patches, so a plan can link an item into the new folder, or into a
+subfolder it creates, and make it the cover.
 
 `folder.update`'s `changes.name`/`.parent`/`.title`/`.data`/`.cover`/`.dateRange`/`.tags`/`.includeInPublication` are exactly `POST /folders/{repoId}/{folderIdOrPath}`'s
 own update fields; `changes.permissions` is the same patch array `PATCH .../permissions` accepts (a `permissions`
@@ -1261,8 +1301,8 @@ change additionally requires the caller to hold the repository's **owner** role,
 is the same patch array `PATCH .../media` accepts. `changes.texts` is `{ "put": { "<lang>": "<markdown>" }, "delete":
 ["<lang>", ...] }` — `put` stores/replaces the body for each named language (merged into the folder's existing
 translations, like `PUT .../text`); `delete` removes a stored language entirely (no single-resource equivalent exists
-for this). `changes.cover` is applied last, after `changes.media`, so it can name an item that the same operation
-links into the folder.
+for this). `changes.cover` is applied last, after every operation's `media`, so it can name an item that the same
+plan links into the folder or one of its subfolders.
 
 ```json5
 { "op": "repository.update", "expectedRevision": "old-repository-revision-uuid", "name": "piotrek", "title": "Piotrek" }
@@ -1315,8 +1355,9 @@ and checking every `expectedRevision`, the server applies the plan in fixed phas
    out of a deleted folder (phase 2) survives the delete.
 4. Every folder from phase 2 takes its final name.
 5. Content, against the folders' final locations: each `folder.update`'s `title`/`data`/`dateRange`, then `texts`,
-   then `permissions`, then `media` (applied strictly in array order, as in `PATCH .../media`), then `cover`; then
-   each `folder.create`'s `texts`, `permissions`, `media`, `dateRange`, and `cover`. Changes to a folder that a
+   then `permissions`, then `media` (applied strictly in array order, as in `PATCH .../media`); then each
+   `folder.create`'s `texts`, `permissions`, `media`, and `dateRange`; then every `cover`, of updates and creates
+   alike, against the plan's final media. Changes to a folder that a
    `folder.delete` in the same plan removed (because it deleted an ancestor) are skipped.
 
 Only the **final** state must have unique folder paths. A plan may delete a folder and create another under the same
@@ -1352,12 +1393,14 @@ subtree that a `folder.delete` in the same plan removes — whether its `parent`
   `repository.update` op was included; one `"folder:<uuid>"` entry per folder touched by `folder.create` or
   `folder.update` — not for `folder.delete`).
 - `400 Bad Request` — missing/unparseable `If-Match` or `Idempotency-Key`, or a body that fails to decode.
-- `403 Forbidden` — the caller lacks the permission a specific operation requires. Nothing in the plan is applied.
+- `403 Forbidden` — the caller lacks the permission a specific operation requires: `write` on a `folder.update` or
+  `folder.delete` target, on a `folder.create`'s parent, and on the new parent of a move. Nothing in the plan is
+  applied.
 - `404 Not Found` (`urn:bootstrap:error:repository-not-found`) — repository not found.
 - `404 Not Found` (`urn:bootstrap:error:folder-not-found`) — an operation's `folder` or `parent` references a folder
   that does not exist.
-- `404 Not Found` (`urn:bootstrap:error:media-item-not-found`) — a media `add` names a nonexistent media item, or a
-  media `move` names a filename that isn't linked in the folder.
+- `404 Not Found` (`urn:bootstrap:error:media-item-not-found`) — a media `add` names a nonexistent media item or one
+  the caller can't read, or a media `move` names a filename that isn't linked in the folder.
 - `404 Not Found` (`urn:bootstrap:error:user-not-found`) — a permission patch names an email with no registered user.
 - `409 Conflict` (`urn:bootstrap:error:revision-conflict`) — two cases share this `type`; the `reason` extension member
   tells them apart:
@@ -1413,7 +1456,7 @@ subtree that a `folder.delete` in the same plan removes — whether its `parent`
 
 - `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, no `errors` member) — a media `move` whose
   `afterFilename` equals its `filename`; a `dateRange` whose `start` is after its `end`; or a `cover` that is not an
-  image, is `restricted`, or is not in the folder or its subfolders once the operation's media patches have applied
+  image, is `restricted`, or is not in the folder or its subfolders once every operation's media patches have applied
   (title `Invalid Folder Cover`). A `cover` naming a nonexistent media item is a `404`
   (`urn:bootstrap:error:media-item-not-found`).
 - `422 Unprocessable Entity` (`urn:bootstrap:error:validation-failed`, title `Built-in Folder`) — a `folder.update`
@@ -1661,7 +1704,8 @@ Updates a folder (rename, move, change title, or replace typed content). `meta.r
 All fields under `data` are optional:
 
 - `name` — renames the folder (updates all descendant paths).
-- `parent` — moves the folder under the referenced parent.
+- `parent` — moves the folder under the referenced parent. Like creating a folder there, this needs `write`
+  permission on the new parent (naming the current parent is not a move).
 - `title` — updates the folder's localized title. A bare string (e.g. `"Updated Title"`) is stored under the request's `Content-Language`, merging with any existing translations; an object (e.g. `{ "en": "Title", "pl": "Tytuł" }`) replaces **all** stored translations at once.
 - `data` — replaces the folder's typed content JSON wholesale (no key-level merge), including the reserved `text`
   key; omitting it leaves the existing content unchanged. Every key is stored as given, so do not echo back the
@@ -1738,7 +1782,16 @@ Lists the subfolders of a folder as a flat list: its direct children, or all its
 #### Request body (optional)
 
 ```json
-{ "query": { "depth": 3, "folderType": ["album"], "tags": ["system:favorite", "winter-2026"], "offset": 0, "limit": 20 } }
+{
+  "query": {
+    "depth": 3,
+    "folderType": ["album"],
+    "tags": ["system:favorite", "winter-2026"],
+    "orderBy": { "property": "dateRangeStart", "order": "desc" },
+    "offset": 0,
+    "limit": 20
+  }
+}
 ```
 
 All fields are optional:
@@ -1750,12 +1803,28 @@ All fields are optional:
   listed. Without it, folders of every type are listed.
 - `tags` — a list of [tags](#tags): only folders with at least one of them are listed. Unknown tags match nothing.
   Without it, or with an empty list, folders are not filtered by tag.
-- `offset` and `limit` — page over the list (after `folderType` and `tags` have been applied). Without them, or without a request
-  body, every folder is returned.
+- `orderBy` — the order of the list, `{ "property": …, "order": "asc" | "desc" }` (also `ascending`/`descending`).
+  `property` is one of:
+  - `tree` (the default when `orderBy` is omitted, ascending) — by path, so each folder comes right before its own
+    descendants; `data.path` tells their nesting apart. It is the only order that keeps the hierarchy together when
+    `depth` goes below the direct children.
+  - `name` — by the folder's `name`, compared by code point.
+  - `title` — by the folder's `title` as the response shows it: in the language negotiated from `Accept-Language`,
+    else in another stored language, chosen as for the response. A folder without a title (or with an empty one) sorts
+    by its `name`. Titles are compared by the Unicode root collation, so case and accents don't split the order
+    (`alps` < `Łódź` < `Zakopane`), though language-specific rules (such as Danish `æøå` sorting last) don't apply.
+    The order depends on the request's language.
+  - `dateRangeStart` — by the start of the folder's `dateRange`: the explicit one, else the automatic one. Folders
+    without a date range come last in both directions. The automatic value is computed in the background, so a folder
+    can move between two pages of a list.
 
-Folders are ordered by path, so each folder comes before its own descendants; `data.path` tells their nesting apart.
+  Folders that compare equal are ordered by path.
+- `offset` and `limit` — page over the list (after `folderType` and `tags` have been applied, in the requested order).
+  Without them, or without a request body, every folder is returned.
+
 With `folderType`, a listed folder's parent may be missing from the list. The response's `meta` echoes `offset` and
-`limit` (`null` when absent) and, when given, `depth`, `folderType`, and `tags` (normalized, without repeats):
+`limit` (`null` when absent) and, when given, `depth`, `folderType`, `tags` (normalized, without repeats), and
+`orderBy`:
 
 ```json
 { "meta": { "offset": 0, "limit": 20, "depth": null, "folderType": ["album"] }, "records": [ … ] }
@@ -1765,7 +1834,7 @@ With `folderType`, a listed folder's parent may be missing from the list. The re
 
 - `200 OK` — paginated array of folder resources
 - `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — an invalid tag, a `depth` below `1`, an empty
-  `folderType`, or an unknown folder type
+  `folderType`, an unknown folder type, or an invalid `orderBy`
 - `404 Not Found`
 
 ---
@@ -2129,7 +2198,8 @@ Replaces the folder's direct media-item membership with exactly the supplied lis
 
 - `204 No Content`
 - `403 Forbidden` — caller lacks write permission on the folder
-- `404 Not Found`
+- `404 Not Found` — the folder, or (`urn:bootstrap:error:media-item-not-found`) a media item that doesn't exist or
+  that the caller can't read
 - `409 Conflict` — duplicate filename in the list
 
 ---
@@ -2182,8 +2252,8 @@ The response lists the filenames actually assigned.
 - `200 OK` — JSON array of the resulting membership (same shape as the GET response), in the folder's custom order
 - `400 Bad Request` — invalid patch op, malformed `remove`, or a `move` whose `afterFilename` equals `filename`
 - `403 Forbidden` — caller lacks write permission on the folder
-- `404 Not Found` — the folder, or (for an `add`) the media item, or (for a `move`) `filename`/`afterFilename` does not
-  resolve to a link in the folder
+- `404 Not Found` — the folder, or (for an `add`) a media item that doesn't exist or that the caller can't read, or (for
+  a `move`) `filename`/`afterFilename` does not resolve to a link in the folder
 - `409 Conflict` — an `add` would create a duplicate filename (and `onConflict` is `fail`)
 
 ---
@@ -2228,7 +2298,8 @@ The snapshot is built from the folder's current state, and checked:
 - **Errors** refuse the publication (`422`): an embedded object that is invalid (`object-invalid`) or of an unknown
   type (`object-unknown`), or a query whose folder doesn't exist (`query-scope-invalid`), is a folder the publication
   excludes (`query-scope-excluded`, for a folder list), or can't be read by the caller (`query-scope-not-readable`,
-  for a gallery).
+  for a gallery); or a publication with more pages or media items than the server allows (`publication-too-large`;
+  2000 pages and 50000 items by default, `publications` in `config/app.conf`).
 - **Warnings** are reported, and the Viewer shows a placeholder: a reference that is missing (`reference-missing`),
   malformed (`reference-malformed`), or unavailable (`reference-unavailable`: a restricted media item, a folder the
   publication excludes, or a media item from outside the folder that the caller can't read), and a directive naming
@@ -2888,13 +2959,19 @@ media type, so it keeps `?size=` semantics identical to the main image `GET` —
 
 ### PUT /media/{repoId}/{folderVar}/{filename}
 
-Uploads a media item. The body is the raw binary. `Content-Type` must be `image/*` or `video/*`.
+Uploads a media item. The body is the raw binary: a JPEG, PNG, WebP, or TIFF image, a camera raw file of a configured
+type (`raw.mimetypes`), or a video. The type is detected from the content; anything else, including SVG, is `415`.
+
+An image of more than 120 million pixels (`media_items.images.max_pixels`), or a video with frames of more than 40
+million (`media_items.videos.max_pixels`), is stored but never processed: it gets no variants, renditions, or poster,
+and requesting one is `422` (`urn:bootstrap:error:image-too-large`).
 
 #### Responses
 
 - `204 No Content` — `Media-Item-Id: <uuid>` header set
 - `403 Forbidden` — insufficient permission
 - `409 Conflict` — filename already exists in folder
+- `413 Content Too Large` (`urn:bootstrap:error:request-too-large`) — over `media_items.max_upload_bytes`
 - `415 Unsupported Media Type`
 
 ---
@@ -2915,6 +2992,8 @@ Downloads the original binary. Supports conditional GET via `If-None-Match` / ET
   has (not a configured `images.sizes` name, or the image already fits within that size)
 - `404 Not Found` (`urn:bootstrap:error:media-variant-not-ready`) — `size` was requested but the image hasn't been
   processed yet (its `image_transform` job is pending, e.g. a camera raw file awaiting decode); retry later
+- `422 Unprocessable Entity` (`urn:bootstrap:error:image-too-large`) — `size` was requested for an image over
+  `media_items.images.max_pixels`, which is never processed
 
 ---
 
@@ -3114,7 +3193,7 @@ by-id endpoint (e.g. `GET /media/{repoId}/mid;{mediaItemId}/hls/master.m3u8`).
 
 ### PUT /media/{repoId}/mid;{mediaItemId}
 
-Uploads a media item. The body is the raw binary. `Content-Type` must be `image/*` or `video/*`.
+Uploads a media item. The body is the raw binary, of a type accepted by `PUT /media/{repoId}/{folderVar}/{filename}`.
 
 If a media item with the given ID already exists, but the raw binary does not correspond to the original BLOB for that existing media item, then 409 Conflict is returned.
 
@@ -3147,6 +3226,7 @@ The raw binary data of the media item, or empty (`Content-Length: 0`) for an upl
   `Repr-Digest`/`Possession-Proof`/`Content-Disposition` header
 - `403 Forbidden` — insufficient permission, or an invalid possession proof
 - `409 Conflict` — media item already exists
+- `413 Content Too Large` (`urn:bootstrap:error:request-too-large`) — over `media_items.max_upload_bytes`
 - `415 Unsupported Media Type`
 - `422 Unprocessable Entity` — upload claim for a file the server can't accept a claim for; upload it in full
 - `428 Precondition Required` — upload claim accepted; the body carries a challenge
