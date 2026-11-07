@@ -3,7 +3,10 @@ import {
   ApiError,
   BootstrapClient,
   ErrorType,
+  generateLoginRequestId,
   isApiError,
+  isLoginCode,
+  isLoginRequestId,
   isVerificationToken,
   MemoryCookieStore,
   type HrefLink,
@@ -82,6 +85,48 @@ describe('auth', () => {
     expect(mock.last.url).toBe('http://localhost:8080/auth/action;send-token');
     expect(mock.last.method).toBe('POST');
     expect(JSON.parse(mock.last.body!)).toEqual({ email: 'test@example.com' });
+  });
+
+  it('sends a requestId and parses the test-user code', async () => {
+    const mock = new MockFetch().enqueue({ status: 200, json: { token: 'tok-123', code: '1234567890' } });
+    const client = makeClient(mock);
+    const requestId = generateLoginRequestId();
+
+    const result = await client.auth.sendToken('test@example.com', { requestId });
+    expect(result).toEqual({ token: 'tok-123', code: '1234567890' });
+    expect(JSON.parse(mock.last.body!)).toEqual({ email: 'test@example.com', requestId });
+  });
+
+  it('logs in with the X-Code header, dropping spaces and hyphens', async () => {
+    const mock = new MockFetch().enqueue({
+      status: 204,
+      headers: { 'set-cookie': 'session=opaque; Path=/' },
+    });
+    const credentials = new MemoryCookieStore();
+    const client = makeClient(mock, credentials);
+    const requestId = generateLoginRequestId();
+
+    await client.auth.loginWithCode(requestId, '123 456-7890');
+    expect(mock.last.url).toBe('http://localhost:8080/auth');
+    expect(mock.last.method).toBe('POST');
+    expect(mock.last.headers.get('authorization')).toBe(`X-Code ${requestId}:1234567890`);
+
+    const headers = new Headers();
+    credentials.decorate(headers);
+    expect(headers.get('cookie')).toBe('session=opaque');
+  });
+
+  it('generates and validates sign-in request ids and codes', () => {
+    const a = generateLoginRequestId();
+    const b = generateLoginRequestId();
+    expect(a).toHaveLength(43);
+    expect(a).not.toBe(b);
+    expect(isLoginRequestId(a)).toBe(true);
+    expect(isLoginRequestId('short')).toBe(false);
+    expect(isLoginCode('123 456 7890')).toBe(true);
+    expect(isLoginCode('123-456-7890')).toBe(true);
+    expect(isLoginCode('12345')).toBe(false);
+    expect(isLoginCode('12345abcde')).toBe(false);
   });
 
   it('returns {} for a real-user 204', async () => {

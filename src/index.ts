@@ -5,6 +5,13 @@ export type { ClientOptions, FetchLike } from './config';
 
 // Resource API interfaces (the user-facing types for the sub-clients).
 export type { IAuthApi } from './api/auth.api';
+export {
+  generateLoginRequestId,
+  isLoginCode,
+  isLoginRequestId,
+  LOGIN_CODE_PATTERN,
+  LOGIN_REQUEST_ID_PATTERN,
+} from './api/auth.api';
 export type { IUsersApi } from './api/users.api';
 export { isVerificationToken, VERIFICATION_TOKEN_PATTERN } from './api/users.api';
 export type {
@@ -145,6 +152,7 @@ export type {
   RedeemAccessLinkResult,
   RedeemedAccessLinkFolder,
   Session,
+  SendTokenOptions,
   SendTokenResult,
 } from './types/auth';
 export type {

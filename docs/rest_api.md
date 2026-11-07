@@ -23,8 +23,8 @@ Localized endpoints accept `Accept-Language` / `Content-Language` headers and re
 
 Authentication is **cookie-based**. The flow:
 
-1. `POST /auth/action;send-token` with the user's email to request a one-time token (delivered by email; test users get it in the response body).
-2. `POST /auth` with header `Authorization: X-Token <email>:<token>`. On success the server replies `204` with a `Set-Cookie: session=<opaque>; Path=/; SameSite=Lax; Secure; HttpOnly` header (`Secure` is left out where the server is configured for plain HTTP, `server.secure_cookies`).
+1. `POST /auth/action;send-token` with the user's email to request a one-time token (delivered by email; test users get it in the response body). With a `requestId` the client generated, the email also carries a short sign-in code for this device.
+2. `POST /auth` with header `Authorization: X-Token <email>:<token>`, or `Authorization: X-Code <requestId>:<code>`. On success the server replies `204` with a `Set-Cookie: session=<opaque>; Path=/; SameSite=Lax; Secure; HttpOnly` header (`Secure` is left out where the server is configured for plain HTTP, `server.secure_cookies`).
 3. The client must **store that `session` cookie and send it on every subsequent request** that requires authentication. A standard cookie jar handles this automatically.
 4. `POST /auth/action;logout` terminates the session; the response clears the cookie (`session=` with `Max-Age=0`).
 
@@ -329,16 +329,30 @@ Issues a one-time login token for the given email. Always returns 204 to avoid u
 A user has at most three unexpired tokens (each lasts 30 minutes): a request beyond that sends no email, but still
 answers `204`. Signing in with a token uses it up.
 
+With a `requestId`, the token also carries a **sign-in code**: 10 digits, shown in the email as `123 456 7890`, short
+enough to type with a TV remote. The code works only together with that `requestId` (`X-Code` in
+[POST /auth](#post-auth)), so only the device that asked for it can use it. The client generates the id: 32 random
+bytes from a cryptographic source (`crypto.getRandomValues`), written as unpadded base64url (43 characters), a new one
+for each request, and keeps it until the user has typed the code. A code works for 15 minutes
+(`login_codes.ttl_minutes`) and for 5 attempts (`login_codes.max_attempts`); signing in with it uses up its token, and
+signing in with the token uses up the code. An id that another token already uses gets no code: the email then carries
+the token only.
+
 #### Request body
 
 ```json
-{ "email": "user@example.com" }
+{ "email": "user@example.com", "requestId": "<43 base64url characters>" }
 ```
+
+`requestId` is optional; without it, no code is made.
 
 #### Responses
 
-- `204 No Content` — token sent by email
-- `200 OK` — test user only: `{ "token": "<uuid>" }`
+- `204 No Content` — token (and code) sent by email, or none sent: the answer is the same whether or not the address
+  has an account
+- `200 OK` — test user only: `{ "token": "<uuid>", "code": "1234567890" }`, `code` only with a `requestId`
+- `400 Bad Request` (`urn:bootstrap:error:validation-failed`) — a `requestId` that isn't 43 base64url characters, for
+  any address
 
 ---
 
@@ -351,6 +365,7 @@ logged out.
 | `Authorization` | Result |
 | --- | --- |
 | `X-Token <email>:<token>` | Logs in the user with an emailed one-time token: `204` |
+| `X-Code <requestId>:<code>` | Logs in the user with an emailed sign-in code and the `requestId` sent with `send-token`: `204`. Spaces and hyphens in the code are ignored |
 | `X-Anonymous` | Creates an anonymous principal, its recovery token, and a session for it: `200`, body below |
 | `X-Anonymous <token>` | Logs in the anonymous principal holding the recovery token: `204` |
 
@@ -375,9 +390,12 @@ A bare `X-Anonymous` always creates a new principal, even when the request carri
 - `200 OK` — anonymous principal created, session started
 - `204 No Content` — session started
 - `400 Bad Request` (`urn:bootstrap:error:bad-request`) — an unsupported scheme, or malformed credentials (an
-  `X-Token` that isn't `<email>:<uuid>`, a token that isn't 43 base64url characters)
-- `401 Unauthorized` — no `Authorization` header; an invalid token, unknown user, or unverified user; or a recovery
-  token that no principal holds (deleted, or unused for the inactivity period). `WWW-Authenticate` lists both schemes.
+  `X-Token` that isn't `<email>:<uuid>`, an `X-Code` that isn't `<requestId>:<code>` or whose `requestId` isn't 43
+  base64url characters, a token that isn't 43 base64url characters)
+- `401 Unauthorized` — no `Authorization` header; an invalid token, unknown user, or unverified user; a sign-in code
+  that is wrong, not 10 digits, expired, or out of attempts, or a `requestId` with no code; or a recovery token that
+  no principal holds (deleted, or unused for the inactivity period). Every failed sign-in code gets the same answer.
+  `WWW-Authenticate` lists the three schemes.
 
 ---
 

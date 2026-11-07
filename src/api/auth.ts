@@ -1,6 +1,12 @@
 import { parseJson, parseVoid, Transport } from '../http/transport';
 import type { LinksProvider } from '../links';
-import type { AnonymousLoginResult, RedeemAccessLinkResult, SendTokenResult, Session } from '../types/auth';
+import type {
+  AnonymousLoginResult,
+  RedeemAccessLinkResult,
+  SendTokenOptions,
+  SendTokenResult,
+  Session,
+} from '../types/auth';
 import type { IAuthApi } from './auth.api';
 
 /** Authentication & session endpoints. */
@@ -13,13 +19,16 @@ export class AuthApi implements IAuthApi {
   /**
    * Request a one-time login token for `email`. Always succeeds (no user
    * enumeration). For test users the token is returned in the body; otherwise
-   * `{}` and the token is sent by email.
+   * `{}` and the token is sent by email. With `options.requestId` a sign-in
+   * code is made too.
    */
-  async sendToken(email: string): Promise<SendTokenResult> {
+  async sendToken(email: string, options: SendTokenOptions = {}): Promise<SendTokenResult> {
+    const value: { email: string; requestId?: string } = { email };
+    if (options.requestId !== undefined) value.requestId = options.requestId;
     return this.transport.request({
       method: 'POST',
       path: (await this.links()).sendToken().href,
-      body: { kind: 'json', value: { email } },
+      body: { kind: 'json', value },
       // 204 (real user) returns no body; 200 (test user) returns the token.
       parse: async (res) => (res.status === 204 ? {} : ((await res.json()) as SendTokenResult)),
     });
@@ -34,6 +43,16 @@ export class AuthApi implements IAuthApi {
       method: 'POST',
       path: (await this.links()).login().href,
       headers: { authorization: `X-Token ${email}:${token}` },
+      parse: parseVoid,
+    });
+  }
+
+  /** Exchange an emailed sign-in code (with its `requestId`) for a session. */
+  async loginWithCode(requestId: string, code: string): Promise<void> {
+    return this.transport.request({
+      method: 'POST',
+      path: (await this.links()).login().href,
+      headers: { authorization: `X-Code ${requestId}:${code.replace(/[\s-]/g, '')}` },
       parse: parseVoid,
     });
   }

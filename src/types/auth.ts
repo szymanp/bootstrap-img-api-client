@@ -9,6 +9,26 @@ import type { UuidString } from "./common";
 export interface SendTokenResult {
   /** Present only for test users; otherwise the call returns 204 with no body. */
   token?: string;
+
+  /**
+   * The 10-digit sign-in code (e.g. `1234567890`). Present only for test
+   * users, and only when `send-token` was called with a `requestId` that got a
+   * code.
+   */
+  code?: string;
+}
+
+/** Options for `IAuthApi.sendToken`. */
+export interface SendTokenOptions {
+  /**
+   * A client-generated id (32 random bytes as unpadded base64url, 43
+   * characters) — see `generateLoginRequestId()`. With it, the email also
+   * carries a short sign-in code usable only together with this id
+   * (`IAuthApi.loginWithCode`). Use a new id for each request and keep it
+   * until the user has typed the code. A malformed id yields a 400 `ApiError`
+   * (`ErrorType.ValidationFailed`).
+   */
+  requestId?: string;
 }
 
 /**

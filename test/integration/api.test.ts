@@ -1,7 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ApiError, BootstrapClient, ErrorType, FolderRef, MediaRef, isApiError } from '../../src/index';
+import {
+  ApiError,
+  BootstrapClient,
+  ErrorType,
+  FolderRef,
+  MediaRef,
+  generateLoginRequestId,
+  isApiError,
+} from '../../src/index';
 
 /**
  * Integration tests against a live server. Opt-in: set BOOTSTRAP_API_URL (and
@@ -49,6 +57,22 @@ run('integration (live server)', () => {
     const session = await client.auth.session();
     expect(session.email).toBe(email);
     expect(session.principal).toBeTruthy();
+  });
+
+  it('logs in with a sign-in code tied to its requestId', async () => {
+    const other = new BootstrapClient({ baseUrl, defaultLanguage: 'en-US' });
+    const requestId = generateLoginRequestId();
+    const { code } = await other.auth.sendToken(email, { requestId });
+    expect(code).toMatch(/^[0-9]{10}$/);
+
+    // The code is useless with any other requestId.
+    await expect(other.auth.loginWithCode(generateLoginRequestId(), code!)).rejects.toSatisfy(
+      (e: unknown) => isApiError(e) && e.status === 401,
+    );
+
+    await other.auth.loginWithCode(requestId, `${code!.slice(0, 3)} ${code!.slice(3, 6)} ${code!.slice(6)}`);
+    expect((await other.auth.session()).email).toBe(email);
+    await other.auth.logout();
   });
 
   it('runs the full repo + folder + media lifecycle', async () => {
