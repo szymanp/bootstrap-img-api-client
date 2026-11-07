@@ -25,6 +25,16 @@ describe('FolderRef', () => {
     expect(FolderRef.from('/a/b').toPathSegment()).toBe('path;a;b');
   });
 
+  it('renders the root folder as `path;`', () => {
+    expect(FolderRef.path('/').toPathSegment()).toBe('path;');
+    expect(FolderRef.path('').toPathSegment()).toBe('path;');
+    expect(FolderRef.path([]).toPathSegment()).toBe('path;');
+    expect(FolderRef.from('path;').toPathSegment()).toBe('path;');
+    expect(FolderRef.from({ path: '/' }).toPathSegment()).toBe('path;');
+    expect(FolderRef.path('/').toReference()).toEqual({ path: '/' });
+    expect(FolderRef.from('path;').toReference()).toEqual({ path: '/' });
+  });
+
   it('encodes segments', () => {
     expect(FolderRef.path(['a b', 'c/d']).toPathSegment()).toBe('path;a%20b;c%2Fd');
   });

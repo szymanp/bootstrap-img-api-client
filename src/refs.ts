@@ -33,7 +33,10 @@ export class FolderRef {
     if (typeof ref === 'string') {
       // A `id;…` / `path;…` segment, or a plain path.
       if (ref.startsWith('id;')) return FolderRef.id(ref.slice(3));
-      if (ref.startsWith('path;')) return FolderRef.path(ref.slice(5).split(';'));
+      if (ref.startsWith('path;')) {
+        const rest = ref.slice(5);
+        return FolderRef.path(rest === '' ? [] : rest.split(';'));
+      }
       return FolderRef.path(ref);
     }
     if ('id' in ref) return FolderRef.id(ref.id);
@@ -45,6 +48,8 @@ export class FolderRef {
     if (this.kind === 'id') {
       return `id;${encodeURIComponent(this.parts[0] ?? '')}`;
     }
+    // The root folder has no segments but still needs the `;` separator: `path;`.
+    if (this.parts.length === 0) return 'path;';
     return ['path', ...this.parts.map(encodeURIComponent)].join(';');
   }
 
